@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OlioCMS - Modern Headless Content Management System</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f4effe',
+                            100: '#e7dcfd',
+                            200: '#d0bafb',
+                            300: '#b28df8',
+                            400: '#9859f8',
+                            500: '#8542f7',
+                            600: '#702bd9',
+                            700: '#5c1fae',
+                            800: '#4c1c8c',
+                            900: '#3f1871',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Alpine.js CDN -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <style>
+        /* Custom Glassmorphism Utility Classes */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .dark .glass-panel {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+
+        .dark .glass-card {
+            background: rgba(30, 41, 59, 0.45);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Custom Scrollbar for Sleek Minimal Look */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(133, 66, 247, 0.25);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(133, 66, 247, 0.5);
+        }
+    </style>
+</head>
+
+<body class="font-sans antialiased text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-950 transition-colors duration-300 min-h-screen selection:bg-brand-500 selection:text-white"
+      x-data="cmsApp()">
+
+    <div class="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div class="absolute -top-40 -left-40 w-96 h-96 bg-brand-500/20 rounded-full blur-3xl"></div>
+        <div class="absolute top-1/3 -right-40 w-96 h-96 bg-purple-600/15 rounded-full blur-3xl"></div>
+        <div class="absolute -bottom-40 left-1/3 w-96 h-96 bg-indigo-600/15 rounded-full blur-3xl"></div>
+    </div>
+
+    <!-- Notification Toast Message System -->
+    <div class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div x-show="toast.visible"
+                 x-transition:enter="transition ease-out duration-300 transform"
+                 x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+                 x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                 x-transition:leave="transition ease-in duration-200 transform"
+                 x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                 x-transition:leave-end="opacity-0 translate-y-2 scale-95"
+                 class="pointer-events-auto flex items-center gap-3 p-3.5 rounded-xl glass-panel shadow-lg border-l-4"
+                 :class="toast.type === 'success' ? 'border-emerald-500 text-slate-800 dark:text-slate-100' : 'border-brand-500 text-slate-800 dark:text-slate-100'">
+                <i class="fa-solid text-sm" :class="toast.type === 'success' ? 'fa-circle-check text-emerald-500' : 'fa-circle-info text-brand-500'"></i>
+                <span x-text="toast.message" class="text-xs font-medium"></span>
+            </div>
+        </template>
+    </div>
+
+    <!-- AUTHENTICATION VIEW (Logged Out State) -->
+    <div x-show="!isLoggedIn" x-cloak class="relative z-10 min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-md">
+            
+            <!-- REGISTER FORM CARD -->
+            <div x-show="authView === 'register'" class="glass-panel p-6 md:p-8 rounded-2xl shadow-2xl relative overflow-hidden">
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-brand-400 flex items-center justify-center shadow-lg shadow-brand-500/30 text-white font-bold text-base">
+                            <i class="fa-solid fa-cubes"></i>
+                        </div>
+                        <span class="font-bold text-lg tracking-tight text-slate-900 dark:text-white">Olio<span class="text-brand-500">CMS</span></span>
+                    </div>
+                    <!-- Theme Toggle -->
+                    <button @click="toggleTheme()" class="w-8 h-8 rounded-lg glass-card flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-brand-500 transition">
+                        <i class="fa-solid" :class="isDarkMode ? 'fa-sun text-amber-400' : 'fa-moon text-slate-600'"></i>
+                    </button>
+                </div>
+
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Welcome to OlioCMS</h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Signup to your OlioCMS account to start building.</p>
+                </div>
+
+                <form @submit.prevent="handleRegister()" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Email Address</label>
+                        <div class="relative">
+                            <i class="fa-regular fa-envelope absolute left-3 top-3 text-slate-400 text-xs"></i>
+                            <input type="email" x-model="authForm.email" required placeholder="admin@oliocms.io" 
+                                   class="w-full pl-9 pr-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white placeholder-slate-400">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Password</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-lock absolute left-3 top-3 text-slate-400 text-xs"></i>
+                            <input type="password" x-model="authForm.password" required placeholder="••••••••" 
+                                   class="w-full pl-9 pr-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white placeholder-slate-400">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Confirm Password</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-shield-halved absolute left-3 top-3 text-slate-400 text-xs"></i>
+                            <input type="password" x-model="authForm.confirmPassword" required placeholder="••••••••" 
+                                   class="w-full pl-9 pr-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white placeholder-slate-400">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs shadow-lg shadow-brand-500/25 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 mt-2">
+                        <span>Create Olio Account</span>
+                        <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </button>
+                </form>
+
+                <div class="mt-6 pt-4 border-t border-slate-200/50 dark:border-slate-800/50 text-center">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        Already have an account? 
+                        <button @click="authView = 'login'" class="text-brand-500 font-semibold hover:underline ml-1">Log In</button>
+                    </p>
+                </div>
+            </div>
+
+            <!-- LOGIN FORM CARD -->
+            <div x-show="authView === 'login'" class="glass-panel p-6 md:p-8 rounded-2xl shadow-2xl relative overflow-hidden">
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-brand-400 flex items-center justify-center shadow-lg shadow-brand-500/30 text-white font-bold text-base">
+                            <i class="fa-solid fa-cubes"></i>
+                        </div>
+                        <span class="font-bold text-lg tracking-tight text-slate-900 dark:text-white">Olio<span class="text-brand-500">CMS</span></span>
+                    </div>
+                    <button @click="toggleTheme()" class="w-8 h-8 rounded-lg glass-card flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-brand-500 transition">
+                        <i class="fa-solid" :class="isDarkMode ? 'fa-sun text-amber-400' : 'fa-moon text-slate-600'"></i>
+                    </button>
+                </div>
+
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Welcome Back</h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Log in to manage your headless content.</p>
+                </div>
+
+                <form @submit.prevent="handleLogin()" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Email Address</label>
+                        <div class="relative">
+                            <i class="fa-regular fa-envelope absolute left-3 top-3 text-slate-400 text-xs"></i>
+                            <input type="email" x-model="authForm.email" required placeholder="admin@oliocms.io" 
+                                   class="w-full pl-9 pr-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white placeholder-slate-400">
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="text-xs font-medium text-slate-700 dark:text-slate-300">Password</label>
+                            <a href="#" @click.prevent="showToast('Password reset link sent to your email', 'info')" class="text-[11px] text-brand-500 hover:underline">Forgot?</a>
+                        </div>
+                        <div class="relative">
+                            <i class="fa-solid fa-lock absolute left-3 top-3 text-slate-400 text-xs"></i>
+                            <input type="password" x-model="authForm.password" required placeholder="••••••••" 
+                                   class="w-full pl-9 pr-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white placeholder-slate-400">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs shadow-lg shadow-brand-500/25 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 mt-2">
+                        <span>Sign In</span>
+                        <i class="fa-solid fa-right-to-bracket text-xs"></i>
+                    </button>
+                </form>
+
+                <div class="mt-6 pt-4 border-t border-slate-200/50 dark:border-slate-800/50 text-center">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        Don't have an account? 
+                        <button @click="authView = 'register'" class="text-brand-500 font-semibold hover:underline ml-1">Sign Up</button>
+                    </p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MAIN APP INTERFACE (Logged In State) -->
+    <div x-show="isLoggedIn" x-cloak class="relative z-10 min-h-screen flex flex-col md:flex-row">
+
+        <!-- EXPANDABLE HOVER SIDEBAR -->
+        <aside @mouseenter="sidebarExpanded = true" 
+               @mouseleave="sidebarExpanded = false"
+               class="fixed top-0 left-0 h-full z-40 glass-panel transition-all duration-300 ease-in-out flex flex-col border-r border-slate-200/50 dark:border-slate-800/50 hidden md:flex"
+               :class="sidebarExpanded ? 'w-60 shadow-2xl' : 'w-16'">
+            
+            <!-- Top Logo Header -->
+            <div class="h-16 flex items-center px-4 justify-start overflow-hidden border-b border-slate-200/30 dark:border-slate-800/30">
+                <div class="flex items-center gap-3 min-w-max">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-brand-400 flex items-center justify-center shadow-md shadow-brand-500/30 text-white font-bold text-sm">
+                        <i class="fa-solid fa-cubes"></i>
+                    </div>
+                    <span class="font-bold text-sm tracking-tight text-slate-900 dark:text-white transition-opacity duration-300"
+                          :class="sidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 pointer-events-none'">
+                        Olio<span class="text-brand-500">CMS</span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="flex-1 py-4 px-2.5 space-y-1.5 overflow-y-auto">
+                
+                <!-- Dashboard -->
+                <button @click="activeView = 'dashboard'" 
+                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all group relative"
+                        :class="activeView === 'dashboard' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'">
+                    <i class="fa-solid fa-chart-pie text-sm w-5 text-center"></i>
+                    <span class="whitespace-nowrap transition-opacity duration-200" :class="sidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'">Dashboard</span>
+                </button>
+
+                <!-- Media -->
+                <button @click="activeView = 'media'" 
+                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all group relative"
+                        :class="activeView === 'media' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'">
+                    <i class="fa-solid fa-images text-sm w-5 text-center"></i>
+                    <span class="whitespace-nowrap transition-opacity duration-200" :class="sidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'">Media</span>
+                </button>
+
+                <!-- Products (With Submenu on Hover/Click) -->
+                <div class="relative" x-data="{ productsOpen: false }">
+                    <button @click="activeView = 'products'; productTab = 'all'" 
+                            @mouseenter="productsHover = true" 
+                            @mouseleave="productsHover = false"
+                            class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group relative"
+                            :class="activeView === 'products' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-box text-sm w-5 text-center"></i>
+                            <span class="whitespace-nowrap transition-opacity duration-200" :class="sidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'">Products</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-[10px] transition-transform duration-200" 
+                           :class="sidebarExpanded ? 'opacity-100' : 'opacity-0 hidden'"></i>
+                    </button>
+
+                    <!-- Hover Submenu Tooltip when Collapsed or Expanded -->
+                    <div x-show="productsHover && sidebarExpanded" 
+                         x-transition
+                         class="pl-9 pr-2 py-1 space-y-1 mt-1">
+                        <button @click.stop="activeView = 'products'; productTab = 'all'" 
+                                class="w-full text-left py-1 px-2.5 rounded-lg text-[11px] transition"
+                                :class="activeView === 'products' && productTab === 'all' ? 'text-brand-500 font-bold' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'">
+                            • All Products
+                        </button>
+                        <button @click.stop="activeView = 'products'; productTab = 'add'" 
+                                class="w-full text-left py-1 px-2.5 rounded-lg text-[11px] transition"
+                                :class="activeView === 'products' && productTab === 'add' ? 'text-brand-500 font-bold' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'">
+                            • Add Product
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Brands -->
+                <button @click="activeView = 'brands'" 
+                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all group relative"
+                        :class="activeView === 'brands' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'">
+                    <i class="fa-solid fa-copyright text-sm w-5 text-center"></i>
+                    <span class="whitespace-nowrap transition-opacity duration-200" :class="sidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'">Brands</span>
+                </button>
+
+                <!-- Categories -->
+                <button @click="activeView = 'categories'" 
+                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all group relative"
+                        :class="activeView === 'categories' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'">
+                    <i class="fa-solid fa-layer-group text-sm w-5 text-center"></i>
+                    <span class="whitespace-nowrap transition-opacity duration-200" :class="sidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'">Categories</span>
+                </button>
+
+                <!-- Tags -->
+                <button @click="activeView = 'tags'" 
+                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all group relative"
+                        :class="activeView === 'tags' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'">
+                    <i class="fa-solid fa-hashtag text-sm w-5 text-center"></i>
+                    <span class="whitespace-nowrap transition-opacity duration-200" :class="sidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'">Tags</span>
+                </button>
+            </nav>
+
+            <!-- Bottom Profile Icon Section -->
+            <div class="p-2 border-t border-slate-200/30 dark:border-slate-800/30 relative">
+                <button @click="profileMenuOpen = !profileMenuOpen" 
+                        class="w-full flex items-center gap-3 p-2 rounded-xl glass-card hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition">
+                    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150" 
+                         alt="User Profile" class="w-8 h-8 rounded-lg object-cover ring-2 ring-brand-500/30">
+                    <div class="text-left overflow-hidden transition-opacity duration-200" :class="sidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'">
+                        <p class="text-xs font-semibold text-slate-900 dark:text-white truncate">Alex Morgan</p>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate">Admin Lead</p>
+                    </div>
+                </button>
+
+                <!-- Profile Menu Popover (2 Options: Profile Settings & Logout) -->
+                <div x-show="profileMenuOpen" 
+                     @click.outside="profileMenuOpen = false"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 scale-95 -translate-y-2"
+                     x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                     class="absolute bottom-16 left-3 w-48 glass-panel p-1.5 rounded-xl shadow-2xl z-50 space-y-1">
+                    <button @click="activeView = 'profile'; profileMenuOpen = false" 
+                            class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-brand-500 hover:text-white transition">
+                        <i class="fa-solid fa-user-gear text-xs"></i>
+                        <span>Profile Settings</span>
+                    </button>
+                    <button @click="handleLogout()" 
+                            class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-rose-500 hover:bg-rose-500 hover:text-white transition">
+                        <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+                        <span>Logout</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MOBILE NAVBAR TOP HEADER -->
+        <header class="md:hidden glass-panel sticky top-0 z-30 px-4 py-3 flex items-center justify-between border-b border-slate-200/50 dark:border-slate-800/50">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white text-xs font-bold">
+                    <i class="fa-solid fa-cubes"></i>
+                </div>
+                <span class="font-bold text-base text-slate-900 dark:text-white">Olio<span class="text-brand-500">CMS</span></span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button @click="toggleTheme()" class="w-8 h-8 rounded-lg glass-card flex items-center justify-center text-slate-600 dark:text-slate-300">
+                    <i class="fa-solid" :class="isDarkMode ? 'fa-sun text-amber-400' : 'fa-moon text-slate-600'"></i>
+                </button>
+                <button @click="mobileMenuOpen = !mobileMenuOpen" class="w-8 h-8 rounded-lg glass-card flex items-center justify-center text-slate-600 dark:text-slate-300">
+                    <i class="fa-solid fa-bars text-sm"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- MOBILE NAVIGATION DRAWER -->
+        <div x-show="mobileMenuOpen" x-cloak class="md:hidden fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm" @click="mobileMenuOpen = false">
+            <div class="w-64 h-full glass-panel p-4 flex flex-col justify-between" @click.stop>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-200/30 dark:border-slate-800/30 pb-3">
+                        <span class="font-bold text-sm text-slate-900 dark:text-white">Navigation</span>
+                        <button @click="mobileMenuOpen = false" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <nav class="space-y-1.5">
+                        <button @click="activeView = 'dashboard'; mobileMenuOpen = false" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium" :class="activeView === 'dashboard' ? 'bg-brand-500 text-white' : 'text-slate-600 dark:text-slate-300'">
+                            <i class="fa-solid fa-chart-pie"></i> Dashboard
+                        </button>
+                        <button @click="activeView = 'media'; mobileMenuOpen = false" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium" :class="activeView === 'media' ? 'bg-brand-500 text-white' : 'text-slate-600 dark:text-slate-300'">
+                            <i class="fa-solid fa-images"></i> Media
+                        </button>
+                        <button @click="activeView = 'products'; productTab = 'all'; mobileMenuOpen = false" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium" :class="activeView === 'products' ? 'bg-brand-500 text-white' : 'text-slate-600 dark:text-slate-300'">
+                            <i class="fa-solid fa-box"></i> Products
+                        </button>
+                        <button @click="activeView = 'brands'; mobileMenuOpen = false" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium" :class="activeView === 'brands' ? 'bg-brand-500 text-white' : 'text-slate-600 dark:text-slate-300'">
+                            <i class="fa-solid fa-copyright"></i> Brands
+                        </button>
+                        <button @click="activeView = 'categories'; mobileMenuOpen = false" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium" :class="activeView === 'categories' ? 'bg-brand-500 text-white' : 'text-slate-600 dark:text-slate-300'">
+                            <i class="fa-solid fa-layer-group"></i> Categories
+                        </button>
+                        <button @click="activeView = 'tags'; mobileMenuOpen = false" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium" :class="activeView === 'tags' ? 'bg-brand-500 text-white' : 'text-slate-600 dark:text-slate-300'">
+                            <i class="fa-solid fa-hashtag"></i> Tags
+                        </button>
+                    </nav>
+                </div>
+                <div class="pt-4 border-t border-slate-200/30 dark:border-slate-800/30 space-y-2">
+                    <button @click="activeView = 'profile'; mobileMenuOpen = false" class="w-full text-left text-xs font-medium text-slate-700 dark:text-slate-200 py-1.5"><i class="fa-solid fa-user-gear mr-2"></i> Profile Settings</button>
+                    <button @click="handleLogout()" class="w-full text-left text-xs font-medium text-rose-500 py-1.5"><i class="fa-solid fa-right-from-bracket mr-2"></i> Logout</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="flex-1 md:ml-16 transition-all duration-300 p-4 md:p-8 overflow-y-auto min-h-screen">
+            
+            <!-- Global Header Bar for Desktop -->
+            <div class="hidden md:flex items-center justify-between mb-8 pb-4 border-b border-slate-200/40 dark:border-slate-800/40">
+                <div>
+                    <h1 class="text-xl font-bold text-slate-900 dark:text-white capitalize" x-text="activeView"></h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Manage your headless content ecosystem seamlessly.</p>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <!-- Global Search Bar -->
+                    <div class="relative w-64">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        <input type="text" placeholder="Search anything..." 
+                               class="w-full pl-8 pr-3 py-1.5 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                    </div>
+
+                    <!-- Dark / Light Theme Button -->
+                    <button @click="toggleTheme()" 
+                            class="w-9 h-9 rounded-xl glass-card flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-brand-500 transition shadow-sm"
+                            title="Toggle Theme">
+                        <i class="fa-solid text-sm" :class="isDarkMode ? 'fa-sun text-amber-400' : 'fa-moon text-slate-600'"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- VIEW: DASHBOARD -->
+            <div x-show="activeView === 'dashboard'" x-cloak class="space-y-6">
+                
+                <!-- Welcome Banner -->
+                <div class="glass-panel p-6 rounded-2xl relative overflow-hidden bg-gradient-to-r from-brand-600/10 via-purple-600/5 to-transparent">
+                    <div class="max-w-xl">
+                        <span class="text-[10px] uppercase font-bold tracking-wider text-brand-500 bg-brand-500/10 px-2.5 py-1 rounded-full">Onboarding Wizard</span>
+                        <h2 class="text-lg font-bold text-slate-900 dark:text-white mt-2">Welcome to OlioCMS, Alex!</h2>
+                        <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">Complete your store setup checklist below to initialize your GraphQL & REST API endpoints for product syncing.</p>
+                    </div>
+                </div>
+
+                <!-- CHECKLIST SECTION -->
+                <div class="glass-panel p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200/50 dark:border-slate-800/50">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-white">Setup Checklist</h3>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Track your progress toward launching your headless store.</p>
+                        </div>
+                        <span class="text-xs font-semibold text-brand-500" x-text="`${completedChecklistCount()}/5 Completed`"></span>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mb-6 overflow-hidden">
+                        <div class="bg-brand-500 h-1.5 rounded-full transition-all duration-500" :style="`width: ${(completedChecklistCount() / 5) * 100}%`"></div>
+                    </div>
+
+                    <!-- Checklist Steps Items -->
+                    <div class="space-y-3">
+                        
+                        <!-- Step 1: Complete Profile Settings -->
+                        <div class="flex items-center justify-between p-3 rounded-xl glass-card transition hover:border-brand-500/40"
+                             :class="checklist.profile ? 'opacity-80 bg-brand-500/5' : ''">
+                            <div class="flex items-center gap-3">
+                                <button @click="checklist.profile = !checklist.profile" class="w-5 h-5 rounded-md flex items-center justify-center border transition"
+                                        :class="checklist.profile ? 'bg-brand-500 border-brand-500 text-white' : 'border-slate-300 dark:border-slate-700'">
+                                    <i x-show="checklist.profile" class="fa-solid fa-check text-[10px]"></i>
+                                </button>
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-900 dark:text-white" :class="checklist.profile ? 'line-through text-slate-400' : ''">Complete Profile Settings</h4>
+                                    <p class="text-[10px] text-slate-500 dark:text-slate-400">Set up your store name, API keys, and notification email address.</p>
+                                </div>
+                            </div>
+                            <button @click="activeView = 'profile'" class="px-3 py-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-800/60 hover:bg-brand-500 hover:text-white text-[11px] font-medium transition text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                <span>Go to Profile</span>
+                                <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                            </button>
+                        </div>
+
+                        <!-- Step 2: Add Categories -->
+                        <div class="flex items-center justify-between p-3 rounded-xl glass-card transition hover:border-brand-500/40"
+                             :class="checklist.categories ? 'opacity-80 bg-brand-500/5' : ''">
+                            <div class="flex items-center gap-3">
+                                <button @click="checklist.categories = !checklist.categories" class="w-5 h-5 rounded-md flex items-center justify-center border transition"
+                                        :class="checklist.categories ? 'bg-brand-500 border-brand-500 text-white' : 'border-slate-300 dark:border-slate-700'">
+                                    <i x-show="checklist.categories" class="fa-solid fa-check text-[10px]"></i>
+                                </button>
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-900 dark:text-white" :class="checklist.categories ? 'line-through text-slate-400' : ''">Add Categories</h4>
+                                    <p class="text-[10px] text-slate-500 dark:text-slate-400">Organize your product catalog into main taxonomy branches.</p>
+                                </div>
+                            </div>
+                            <button @click="activeView = 'categories'" class="px-3 py-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-800/60 hover:bg-brand-500 hover:text-white text-[11px] font-medium transition text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                <span>Add Categories</span>
+                                <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                            </button>
+                        </div>
+
+                        <!-- Step 3: Add Brands -->
+                        <div class="flex items-center justify-between p-3 rounded-xl glass-card transition hover:border-brand-500/40"
+                             :class="checklist.brands ? 'opacity-80 bg-brand-500/5' : ''">
+                            <div class="flex items-center gap-3">
+                                <button @click="checklist.brands = !checklist.brands" class="w-5 h-5 rounded-md flex items-center justify-center border transition"
+                                        :class="checklist.brands ? 'bg-brand-500 border-brand-500 text-white' : 'border-slate-300 dark:border-slate-700'">
+                                    <i x-show="checklist.brands" class="fa-solid fa-check text-[10px]"></i>
+                                </button>
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-900 dark:text-white" :class="checklist.brands ? 'line-through text-slate-400' : ''">Add Brands</h4>
+                                    <p class="text-[10px] text-slate-500 dark:text-slate-400">Create vendor and manufacturer profiles for easy filtering.</p>
+                                </div>
+                            </div>
+                            <button @click="activeView = 'brands'" class="px-3 py-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-800/60 hover:bg-brand-500 hover:text-white text-[11px] font-medium transition text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                <span>Add Brands</span>
+                                <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                            </button>
+                        </div>
+
+                        <!-- Step 4: Add Tags -->
+                        <div class="flex items-center justify-between p-3 rounded-xl glass-card transition hover:border-brand-500/40"
+                             :class="checklist.tags ? 'opacity-80 bg-brand-500/5' : ''">
+                            <div class="flex items-center gap-3">
+                                <button @click="checklist.tags = !checklist.tags" class="w-5 h-5 rounded-md flex items-center justify-center border transition"
+                                        :class="checklist.tags ? 'bg-brand-500 border-brand-500 text-white' : 'border-slate-300 dark:border-slate-700'">
+                                    <i x-show="checklist.tags" class="fa-solid fa-check text-[10px]"></i>
+                                </button>
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-900 dark:text-white" :class="checklist.tags ? 'line-through text-slate-400' : ''">Add Tags</h4>
+                                    <p class="text-[10px] text-slate-500 dark:text-slate-400">Define search keywords (e.g. Featured, Sale, Winter Collection).</p>
+                                </div>
+                            </div>
+                            <button @click="activeView = 'tags'" class="px-3 py-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-800/60 hover:bg-brand-500 hover:text-white text-[11px] font-medium transition text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                <span>Add Tags</span>
+                                <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                            </button>
+                        </div>
+
+                        <!-- Step 5: Add First Product -->
+                        <div class="flex items-center justify-between p-3 rounded-xl glass-card transition hover:border-brand-500/40"
+                             :class="checklist.firstProduct ? 'opacity-80 bg-brand-500/5' : ''">
+                            <div class="flex items-center gap-3">
+                                <button @click="checklist.firstProduct = !checklist.firstProduct" class="w-5 h-5 rounded-md flex items-center justify-center border transition"
+                                        :class="checklist.firstProduct ? 'bg-brand-500 border-brand-500 text-white' : 'border-slate-300 dark:border-slate-700'">
+                                    <i x-show="checklist.firstProduct" class="fa-solid fa-check text-[10px]"></i>
+                                </button>
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-900 dark:text-white" :class="checklist.firstProduct ? 'line-through text-slate-400' : ''">Add Your First Product</h4>
+                                    <p class="text-[10px] text-slate-500 dark:text-slate-400">Launch your multi-stage product form to upload your initial item.</p>
+                                </div>
+                            </div>
+                            <button @click="activeView = 'products'; productTab = 'add'" class="px-3 py-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-800/60 hover:bg-brand-500 hover:text-white text-[11px] font-medium transition text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                <span>Create Product</span>
+                                <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Quick Summary Stats Grid -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="glass-card p-4 rounded-xl flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-brand-500/10 text-brand-500 flex items-center justify-center text-sm font-bold">
+                            <i class="fa-solid fa-box"></i>
+                        </div>
+                        <div>
+                            <span class="block text-xs text-slate-500 dark:text-slate-400">Total Products</span>
+                            <span class="text-base font-bold text-slate-900 dark:text-white" x-text="productsList.length"></span>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-4 rounded-xl flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center text-sm font-bold">
+                            <i class="fa-solid fa-layer-group"></i>
+                        </div>
+                        <div>
+                            <span class="block text-xs text-slate-500 dark:text-slate-400">Categories</span>
+                            <span class="text-base font-bold text-slate-900 dark:text-white" x-text="categoriesList.length"></span>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-4 rounded-xl flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center text-sm font-bold">
+                            <i class="fa-solid fa-copyright"></i>
+                        </div>
+                        <div>
+                            <span class="block text-xs text-slate-500 dark:text-slate-400">Active Brands</span>
+                            <span class="text-base font-bold text-slate-900 dark:text-white" x-text="brandsList.length"></span>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-4 rounded-xl flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center text-sm font-bold">
+                            <i class="fa-solid fa-images"></i>
+                        </div>
+                        <div>
+                            <span class="block text-xs text-slate-500 dark:text-slate-400">Media Files</span>
+                            <span class="text-base font-bold text-slate-900 dark:text-white" x-text="mediaList.length"></span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- VIEW: MEDIA -->
+            <div x-show="activeView === 'media'" x-cloak class="space-y-5">
+                
+                <!-- Media Toolbar Header -->
+                <div class="glass-panel p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <!-- Search Media -->
+                        <div class="relative w-full md:w-60">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                            <input type="text" x-model="mediaSearch" placeholder="Search media by title..." 
+                                   class="w-full pl-8 pr-3 py-1.5 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        </div>
+
+                        <!-- Filter Type -->
+                        <select x-model="mediaFilter" class="px-3 py-1.5 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                            <option value="all">All Media Types</option>
+                            <option value="image">Images Only</option>
+                            <option value="vector">SVG Icons</option>
+                        </select>
+                    </div>
+
+                    <!-- Upload Button -->
+                    <button @click="showMediaModal = true" class="px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs shadow-md shadow-brand-500/20 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-cloud-arrow-up text-xs"></i>
+                        <span>Upload New Media</span>
+                    </button>
+                </div>
+
+                <!-- Media Asset Grid Display -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <template x-for="item in filteredMedia" :key="item.id">
+                        <div class="glass-card rounded-xl overflow-hidden group hover:shadow-lg transition-all border border-slate-200/50 dark:border-slate-800/50">
+                            <div class="aspect-square bg-slate-200/50 dark:bg-slate-800/50 relative overflow-hidden flex items-center justify-center">
+                                <img :src="item.url" :alt="item.name" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                                <div class="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
+                                    <button @click="showToast('Image URL copied to clipboard!', 'success')" class="w-7 h-7 rounded-lg bg-white/20 hover:bg-white/40 text-white flex items-center justify-center text-xs backdrop-blur-md">
+                                        <i class="fa-solid fa-link"></i>
+                                    </button>
+                                    <button @click="deleteMedia(item.id)" class="w-7 h-7 rounded-lg bg-rose-500/80 hover:bg-rose-600 text-white flex items-center justify-center text-xs backdrop-blur-md">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="p-2.5">
+                                <p class="text-[11px] font-semibold text-slate-900 dark:text-white truncate" x-text="item.name"></p>
+                                <div class="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                                    <span x-text="item.size"></span>
+                                    <span class="uppercase" x-text="item.format"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Pagination Component -->
+                <div class="glass-panel p-3 rounded-xl flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                    <span>Showing 1-6 of <span x-text="filteredMedia.length"></span> assets</span>
+                    <div class="flex items-center gap-1.5">
+                        <button class="w-7 h-7 rounded-lg glass-card flex items-center justify-center hover:bg-brand-500 hover:text-white transition disabled:opacity-50" disabled><i class="fa-solid fa-chevron-left text-[10px]"></i></button>
+                        <button class="w-7 h-7 rounded-lg bg-brand-500 text-white font-medium flex items-center justify-center">1</button>
+                        <button class="w-7 h-7 rounded-lg glass-card flex items-center justify-center hover:bg-brand-500 hover:text-white transition"><i class="fa-solid fa-chevron-right text-[10px]"></i></button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- VIEW: PRODUCTS -->
+            <div x-show="activeView === 'products'" x-cloak class="space-y-6">
+                
+                <!-- TOP HORIZONTAL SUB-TABS -->
+                <div class="border-b border-slate-200/50 dark:border-slate-800/50 flex items-center gap-6">
+                    <button @click="productTab = 'all'" 
+                            class="pb-3 text-xs font-semibold relative transition"
+                            :class="productTab === 'all' ? 'text-brand-500 border-b-2 border-brand-500' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'">
+                        <i class="fa-solid fa-list mr-1.5"></i> All Products
+                    </button>
+                    <button @click="productTab = 'add'" 
+                            class="pb-3 text-xs font-semibold relative transition"
+                            :class="productTab === 'add' ? 'text-brand-500 border-b-2 border-brand-500' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'">
+                        <i class="fa-solid fa-plus mr-1.5"></i> Add Product
+                    </button>
+                </div>
+
+                <!-- SUB-TAB 1: ALL PRODUCTS LIST TABLE -->
+                <div x-show="productTab === 'all'" class="space-y-4">
+                    <div class="glass-panel rounded-2xl overflow-hidden shadow-sm">
+                        
+                        <!-- Table Filters Bar -->
+                        <div class="p-4 border-b border-slate-200/40 dark:border-slate-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="relative w-full sm:w-64">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                                <input type="text" x-model="productSearch" placeholder="Search catalog products..." 
+                                       class="w-full pl-8 pr-3 py-1.5 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                            </div>
+                            <button @click="productTab = 'add'" class="px-3.5 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-medium transition flex items-center gap-2">
+                                <i class="fa-solid fa-plus text-[10px]"></i> Create New
+                            </button>
+                        </div>
+
+                        <!-- Data Table -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-200/30 dark:bg-slate-800/30 text-[11px] font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200/30 dark:border-slate-800/30 uppercase tracking-wider">
+                                        <th class="py-3 px-4">Product Details</th>
+                                        <th class="py-3 px-4">Category</th>
+                                        <th class="py-3 px-4">Price</th>
+                                        <th class="py-3 px-4">SKU</th>
+                                        <th class="py-3 px-4">Stock</th>
+                                        <th class="py-3 px-4 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200/30 dark:divide-slate-800/30 text-xs">
+                                    <template x-for="prod in filteredProducts" :key="prod.id">
+                                        <tr class="hover:bg-slate-200/20 dark:hover:bg-slate-800/20 transition">
+                                            <td class="py-3 px-4">
+                                                <div class="flex items-center gap-3">
+                                                    <img :src="prod.image" :alt="prod.name" class="w-9 h-9 rounded-lg object-cover bg-slate-200 dark:bg-slate-800">
+                                                    <div>
+                                                        <span class="font-semibold text-slate-900 dark:text-white block" x-text="prod.name"></span>
+                                                        <span class="text-[10px] text-slate-500 dark:text-slate-400" x-text="prod.type"></span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="py-3 px-4 text-slate-600 dark:text-slate-300" x-text="prod.category"></td>
+                                            <td class="py-3 px-4 font-semibold text-slate-900 dark:text-white" x-text="`$${prod.price}`"></td>
+                                            <td class="py-3 px-4 text-slate-500 dark:text-slate-400 font-mono text-[11px]" x-text="prod.sku"></td>
+                                            <td class="py-3 px-4">
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-medium" 
+                                                      :class="prod.stockStatus === 'In Stock' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'" 
+                                                      x-text="prod.stockStatus"></span>
+                                            </td>
+                                            <td class="py-3 px-4 text-right">
+                                                <div class="flex items-center justify-end gap-1.5">
+                                                    <button @click="showToast('Edit product mode simulation', 'info')" class="w-7 h-7 rounded-lg glass-card flex items-center justify-center text-slate-500 hover:text-brand-500 transition"><i class="fa-solid fa-pen text-[10px]"></i></button>
+                                                    <button @click="deleteProduct(prod.id)" class="w-7 h-7 rounded-lg glass-card flex items-center justify-center text-slate-500 hover:text-rose-500 transition"><i class="fa-solid fa-trash text-[10px]"></i></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- SUB-TAB 2: ADD PRODUCT 4-STAGE MULTI-STEP FORM -->
+                <div x-show="productTab === 'add'" class="glass-panel p-6 rounded-2xl space-y-6">
+                    
+                    <!-- Stage Stepper Indicator -->
+                    <div class="grid grid-cols-4 gap-2 pb-6 border-b border-slate-200/40 dark:border-slate-800/40">
+                        <div class="flex flex-col items-center gap-1 cursor-pointer" @click="productStage = 1">
+                            <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition"
+                                 :class="productStage === 1 ? 'bg-brand-500 text-white shadow-md shadow-brand-500/30' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'">1</div>
+                            <span class="text-[10px] font-semibold uppercase tracking-wider" :class="productStage === 1 ? 'text-brand-500' : 'text-slate-400'">General</span>
+                        </div>
+
+                        <div class="flex flex-col items-center gap-1 cursor-pointer" @click="productStage = 2">
+                            <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition"
+                                 :class="productStage === 2 ? 'bg-brand-500 text-white shadow-md shadow-brand-500/30' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'">2</div>
+                            <span class="text-[10px] font-semibold uppercase tracking-wider" :class="productStage === 2 ? 'text-brand-500' : 'text-slate-400'">Inventory</span>
+                        </div>
+
+                        <div class="flex flex-col items-center gap-1 cursor-pointer" @click="productStage = 3">
+                            <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition"
+                                 :class="productStage === 3 ? 'bg-brand-500 text-white shadow-md shadow-brand-500/30' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'">3</div>
+                            <span class="text-[10px] font-semibold uppercase tracking-wider" :class="productStage === 3 ? 'text-brand-500' : 'text-slate-400'">Attributes</span>
+                        </div>
+
+                        <div class="flex flex-col items-center gap-1 cursor-pointer" @click="productStage = 4">
+                            <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition"
+                                 :class="productStage === 4 ? 'bg-brand-500 text-white shadow-md shadow-brand-500/30' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'">4</div>
+                            <span class="text-[10px] font-semibold uppercase tracking-wider" :class="productStage === 4 ? 'text-brand-500' : 'text-slate-400'">Media</span>
+                        </div>
+                    </div>
+
+                    <!-- STAGE 1: GENERAL -->
+                    <div x-show="productStage === 1" class="space-y-4 max-w-2xl mx-auto">
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white mb-2">Stage 1: General Information</h3>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Product Name</label>
+                            <input type="text" x-model="newProduct.name" placeholder="e.g. Minimalist Studio Headphones" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Short Description</label>
+                            <input type="text" x-model="newProduct.shortDesc" placeholder="Brief tagline overview..." class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Full Description</label>
+                            <textarea x-model="newProduct.description" rows="3" placeholder="Detailed product spec & copy..." class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white"></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Category</label>
+                                <select x-model="newProduct.category" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                                    <template x-for="cat in categoriesList" :key="cat.id">
+                                        <option :value="cat.name" x-text="cat.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Product Type</label>
+                                <select x-model="newProduct.type" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                                    <option value="Simple">Simple Product</option>
+                                    <option value="Variable">Variable Product</option>
+                                    <option value="Digital">Digital Download</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- STAGE 2: INVENTORY -->
+                    <div x-show="productStage === 2" class="space-y-4 max-w-2xl mx-auto">
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white mb-2">Stage 2: Pricing & Stock</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Regular Price ($)</label>
+                                <input type="number" x-model="newProduct.regularPrice" placeholder="199.00" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Selling Price ($)</label>
+                                <input type="number" x-model="newProduct.price" placeholder="149.00" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">SKU Code</label>
+                                <input type="text" x-model="newProduct.sku" placeholder="OLIO-SKU-902" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Stock Status</label>
+                                <select x-model="newProduct.stockStatus" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                                    <option value="In Stock">In Stock</option>
+                                    <option value="Out of Stock">Out of Stock</option>
+                                    <option value="Backorder">On Backorder</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- STAGE 3: ATTRIBUTES -->
+                    <div x-show="productStage === 3" class="space-y-4 max-w-2xl mx-auto">
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white mb-2">Stage 3: Dimensions, Tags & Brands</h3>
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1">Length (cm)</label>
+                                <input type="text" placeholder="25" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1">Width (cm)</label>
+                                <input type="text" placeholder="15" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1">Height (cm)</label>
+                                <input type="text" placeholder="10" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Weight (KG)</label>
+                                <input type="text" placeholder="0.85" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Slug</label>
+                                <input type="text" placeholder="minimalist-studio-headphones" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Visibility</label>
+                                <select class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                                    <option value="public">Public</option>
+                                    <option value="private">Private Draft</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Brand</label>
+                                <select class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                                    <template x-for="b in brandsList" :key="b.id">
+                                        <option :value="b.name" x-text="b.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- STAGE 4: MEDIA -->
+                    <div x-show="productStage === 4" class="space-y-4 max-w-2xl mx-auto">
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white mb-2">Stage 4: Product Image & Gallery</h3>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Main Cover Image URL</label>
+                            <input type="text" x-model="newProduct.image" placeholder="https://images.unsplash.com/..." class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Product Gallery (Multiple Uploads Dropzone)</label>
+                            <div class="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-6 text-center hover:border-brand-500 transition cursor-pointer">
+                                <i class="fa-solid fa-cloud-arrow-up text-2xl text-brand-500 mb-2"></i>
+                                <p class="text-xs font-semibold text-slate-700 dark:text-slate-300">Drag and drop secondary gallery images here</p>
+                                <p class="text-[10px] text-slate-400 mt-1">PNG, JPG, WEBP up to 5MB</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Multi-step Form Controls -->
+                    <div class="flex items-center justify-between pt-4 border-t border-slate-200/40 dark:border-slate-800/40 max-w-2xl mx-auto">
+                        <button x-show="productStage > 1" @click="productStage--" class="px-4 py-2 rounded-xl glass-card text-xs font-medium hover:bg-slate-200 dark:hover:bg-slate-800 transition">
+                            <i class="fa-solid fa-arrow-left mr-1"></i> Previous
+                        </button>
+                        <div></div>
+                        <button x-show="productStage < 4" @click="productStage++" class="px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-medium shadow-md shadow-brand-500/20 transition">
+                            Next Stage <i class="fa-solid fa-arrow-right ml-1"></i>
+                        </button>
+                        <button x-show="productStage === 4" @click="saveProduct()" class="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium shadow-md shadow-emerald-500/20 transition">
+                            <i class="fa-solid fa-check mr-1"></i> Publish Product
+                        </button>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- VIEW: BRANDS -->
+            <div x-show="activeView === 'brands'" x-cloak class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Left Column: Add Brand Form -->
+                <div class="lg:col-span-5 glass-panel p-5 rounded-2xl h-fit space-y-4">
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-white">Add New Brand</h3>
+                    <form @submit.prevent="saveBrand()" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Brand Name</label>
+                            <input type="text" x-model="newBrand.name" required placeholder="e.g. Lumina Audio" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Slug</label>
+                            <input type="text" x-model="newBrand.slug" placeholder="lumina-audio" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Parent Brand</label>
+                            <select x-model="newBrand.parent" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                                <option value="None">None (Root Brand)</option>
+                                <option value="Apex Industries">Apex Industries</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
+                            <textarea x-model="newBrand.description" rows="2" placeholder="Brand narrative..." class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Thumbnail Image URL</label>
+                            <input type="text" x-model="newBrand.thumb" placeholder="https://images.unsplash.com/..." class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        </div>
+                        <button type="submit" class="w-full py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs shadow-md shadow-brand-500/20 transition">
+                            Add Brand
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Right Column: Brands Table List -->
+                <div class="lg:col-span-7 glass-panel rounded-2xl overflow-hidden">
+                    <div class="p-3.5 border-b border-slate-200/40 dark:border-slate-800/40 font-semibold text-xs text-slate-900 dark:text-white flex items-center justify-between">
+                        <span>Created Brands (<span x-text="brandsList.length"></span>)</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-200/30 dark:bg-slate-800/30 text-[11px] font-semibold text-slate-500 border-b border-slate-200/30 dark:border-slate-800/30">
+                                    <th class="py-2.5 px-3">Brand</th>
+                                    <th class="py-2.5 px-3">Slug</th>
+                                    <th class="py-2.5 px-3">Parent</th>
+                                    <th class="py-2.5 px-3 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200/30 dark:divide-slate-800/30 text-xs">
+                                <template x-for="brand in brandsList" :key="brand.id">
+                                    <tr class="hover:bg-slate-200/20 dark:hover:bg-slate-800/20 transition">
+                                        <td class="py-2.5 px-3 flex items-center gap-2">
+                                            <img :src="brand.thumb" class="w-6 h-6 rounded-md object-cover bg-slate-200">
+                                            <span class="font-medium text-slate-900 dark:text-white" x-text="brand.name"></span>
+                                        </td>
+                                        <td class="py-2.5 px-3 text-slate-500 font-mono text-[11px]" x-text="brand.slug"></td>
+                                        <td class="py-2.5 px-3 text-slate-500" x-text="brand.parent"></td>
+                                        <td class="py-2.5 px-3 text-right">
+                                            <button @click="deleteBrand(brand.id)" class="text-rose-500 hover:text-rose-600"><i class="fa-solid fa-trash text-[11px]"></i></button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- VIEW: CATEGORIES -->
+            <div x-show="activeView === 'categories'" x-cloak class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Left Column: Add Category Form -->
+                <div class="lg:col-span-5 glass-panel p-5 rounded-2xl h-fit space-y-4">
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-white">Add New Category</h3>
+                    <form @submit.prevent="saveCategory()" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Category Name</label>
+                            <input type="text" x-model="newCategory.name" required placeholder="e.g. Wearable Tech" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Slug</label>
+                            <input type="text" x-model="newCategory.slug" placeholder="wearable-tech" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Parent Category</label>
+                            <select x-model="newCategory.parent" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                                <option value="None">None (Root Level)</option>
+                                <option value="Electronics">Electronics</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
+                            <textarea x-model="newCategory.description" rows="2" placeholder="Category summary..." class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Thumbnail Image URL</label>
+                            <input type="text" x-model="newCategory.thumb" placeholder="https://images.unsplash.com/..." class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        </div>
+                        <button type="submit" class="w-full py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs shadow-md shadow-brand-500/20 transition">
+                            Add Category
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Right Column: Categories Table List -->
+                <div class="lg:col-span-7 glass-panel rounded-2xl overflow-hidden">
+                    <div class="p-3.5 border-b border-slate-200/40 dark:border-slate-800/40 font-semibold text-xs text-slate-900 dark:text-white flex items-center justify-between">
+                        <span>Created Categories (<span x-text="categoriesList.length"></span>)</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-200/30 dark:bg-slate-800/30 text-[11px] font-semibold text-slate-500 border-b border-slate-200/30 dark:border-slate-800/30">
+                                    <th class="py-2.5 px-3">Category</th>
+                                    <th class="py-2.5 px-3">Slug</th>
+                                    <th class="py-2.5 px-3">Parent</th>
+                                    <th class="py-2.5 px-3 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200/30 dark:divide-slate-800/30 text-xs">
+                                <template x-for="cat in categoriesList" :key="cat.id">
+                                    <tr class="hover:bg-slate-200/20 dark:hover:bg-slate-800/20 transition">
+                                        <td class="py-2.5 px-3 flex items-center gap-2">
+                                            <img :src="cat.thumb" class="w-6 h-6 rounded-md object-cover bg-slate-200">
+                                            <span class="font-medium text-slate-900 dark:text-white" x-text="cat.name"></span>
+                                        </td>
+                                        <td class="py-2.5 px-3 text-slate-500 font-mono text-[11px]" x-text="cat.slug"></td>
+                                        <td class="py-2.5 px-3 text-slate-500" x-text="cat.parent"></td>
+                                        <td class="py-2.5 px-3 text-right">
+                                            <button @click="deleteCategory(cat.id)" class="text-rose-500 hover:text-rose-600"><i class="fa-solid fa-trash text-[11px]"></i></button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- VIEW: TAGS -->
+            <div x-show="activeView === 'tags'" x-cloak class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Left Column: Add Tag Form (Note: No Parent tag field as required) -->
+                <div class="lg:col-span-5 glass-panel p-5 rounded-2xl h-fit space-y-4">
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-white">Add New Tag</h3>
+                    <form @submit.prevent="saveTag()" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tag Name</label>
+                            <input type="text" x-model="newTag.name" required placeholder="e.g. Eco-Friendly" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Slug</label>
+                            <input type="text" x-model="newTag.slug" placeholder="eco-friendly" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
+                            <textarea x-model="newTag.description" rows="2" placeholder="Tag classification context..." class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Thumbnail Image URL</label>
+                            <input type="text" x-model="newTag.thumb" placeholder="https://images.unsplash.com/..." class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        </div>
+                        <button type="submit" class="w-full py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs shadow-md shadow-brand-500/20 transition">
+                            Add Tag
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Right Column: Tags Table List -->
+                <div class="lg:col-span-7 glass-panel rounded-2xl overflow-hidden">
+                    <div class="p-3.5 border-b border-slate-200/40 dark:border-slate-800/40 font-semibold text-xs text-slate-900 dark:text-white flex items-center justify-between">
+                        <span>Created Tags (<span x-text="tagsList.length"></span>)</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-200/30 dark:bg-slate-800/30 text-[11px] font-semibold text-slate-500 border-b border-slate-200/30 dark:border-slate-800/30">
+                                    <th class="py-2.5 px-3">Tag Name</th>
+                                    <th class="py-2.5 px-3">Slug</th>
+                                    <th class="py-2.5 px-3 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200/30 dark:divide-slate-800/30 text-xs">
+                                <template x-for="tag in tagsList" :key="tag.id">
+                                    <tr class="hover:bg-slate-200/20 dark:hover:bg-slate-800/20 transition">
+                                        <td class="py-2.5 px-3 flex items-center gap-2">
+                                            <img :src="tag.thumb" class="w-6 h-6 rounded-md object-cover bg-slate-200">
+                                            <span class="font-medium text-slate-900 dark:text-white" x-text="tag.name"></span>
+                                        </td>
+                                        <td class="py-2.5 px-3 text-slate-500 font-mono text-[11px]" x-text="tag.slug"></td>
+                                        <td class="py-2.5 px-3 text-right">
+                                            <button @click="deleteTag(tag.id)" class="text-rose-500 hover:text-rose-600"><i class="fa-solid fa-trash text-[11px]"></i></button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- VIEW: PROFILE SETTINGS -->
+            <div x-show="activeView === 'profile'" x-cloak class="max-w-xl mx-auto glass-panel p-6 rounded-2xl space-y-5">
+                <div class="flex items-center gap-4 pb-4 border-b border-slate-200/40 dark:border-slate-800/40">
+                    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150" class="w-16 h-16 rounded-2xl object-cover ring-4 ring-brand-500/20">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-900 dark:text-white">Alex Morgan</h2>
+                        <p class="text-xs text-slate-500">Master CMS Administrator</p>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
+                        <input type="text" value="Alex Morgan" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Email Address</label>
+                        <input type="email" value="alex.morgan@oliocms.io" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Headless API Endpoint Key</label>
+                        <div class="flex gap-2">
+                            <input type="text" readonly value="olio_live_9921a881bc334ef" class="flex-1 px-3 py-2 rounded-xl text-xs font-mono glass-card border border-slate-200 dark:border-slate-800 text-slate-500">
+                            <button @click="showToast('API Key copied!', 'success')" class="px-3 py-2 rounded-xl bg-brand-500 text-white text-xs font-medium">Copy</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-3 border-t border-slate-200/40 dark:border-slate-800/40 flex justify-end">
+                    <button @click="checklist.profile = true; showToast('Profile settings saved successfully!', 'success')" class="px-4 py-2 rounded-xl bg-brand-500 text-white text-xs font-medium hover:bg-brand-600 transition">
+                        Save Profile Changes
+                    </button>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- UPLOAD MEDIA MODAL -->
+    <div x-show="showMediaModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="showMediaModal = false">
+        <div class="w-full max-w-md glass-panel p-6 rounded-2xl shadow-2xl space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-200/40 dark:border-slate-800/40">
+                <h3 class="text-sm font-bold text-slate-900 dark:text-white">Upload Media Asset</h3>
+                <button @click="showMediaModal = false" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Image Name</label>
+                <input type="text" x-model="newMedia.name" placeholder="banner-winter-sale" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Unsplash / Image URL</label>
+                <input type="text" x-model="newMedia.url" placeholder="https://images.unsplash.com/..." class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+            </div>
+
+            <div class="pt-2 flex justify-end gap-2">
+                <button @click="showMediaModal = false" class="px-3.5 py-1.5 rounded-xl glass-card text-xs font-medium">Cancel</button>
+                <button @click="uploadMedia()" class="px-4 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-medium">Upload File</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function cmsApp() {
+            return {
+                // Application State
+                isLoggedIn: false,
+                authView: 'register', // 'register' or 'login'
+                isDarkMode: true,
+                sidebarExpanded: false,
+                productsHover: false,
+                profileMenuOpen: false,
+                mobileMenuOpen: false,
+                activeView: 'dashboard', // 'dashboard', 'media', 'products', 'brands', 'categories', 'tags', 'profile'
+                productTab: 'all', // 'all' or 'add'
+                productStage: 1, // 1: General, 2: Inventory, 3: Attributes, 4: Media
+                showMediaModal: false,
+
+                // Toast Notifications Queue
+                toasts: [],
+
+                // Auth Form State
+                authForm: {
+                    email: 'admin@oliocms.io',
+                    password: '',
+                    confirmPassword: ''
+                },
+
+                // Checklist Onboarding Tracker
+                checklist: {
+                    profile: false,
+                    categories: false,
+                    brands: false,
+                    tags: false,
+                    firstProduct: false
+                },
+
+                // Search & Filter Inputs
+                mediaSearch: '',
+                mediaFilter: 'all',
+                productSearch: '',
+
+                // Datasets
+                mediaList: [
+                    { id: 1, name: 'minimal-headphones.jpg', url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=300', size: '1.2 MB', format: 'jpg' },
+                    { id: 2, name: 'leather-watch.jpg', url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=300', size: '850 KB', format: 'jpg' },
+                    { id: 3, name: 'smart-speaker.jpg', url: 'https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=300', size: '2.1 MB', format: 'jpg' },
+                    { id: 4, name: 'wireless-mouse.jpg', url: 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&q=80&w=300', size: '640 KB', format: 'jpg' },
+                    { id: 5, name: 'modern-backpack.jpg', url: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=300', size: '1.8 MB', format: 'jpg' },
+                    { id: 6, name: 'ceramic-cup.jpg', url: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=300', size: '920 KB', format: 'jpg' }
+                ],
+
+                productsList: [
+                    { id: 1, name: 'Minimalist Leather Backpack', category: 'Accessories', price: '189.00', sku: 'OLIO-BP-001', stockStatus: 'In Stock', type: 'Simple', image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=200' },
+                    { id: 2, name: 'Studio Wireless Headphones', category: 'Electronics', price: '249.00', sku: 'OLIO-HP-002', stockStatus: 'In Stock', type: 'Simple', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=200' },
+                    { id: 3, name: 'Classic Analog Timepiece', category: 'Apparel', price: '129.00', sku: 'OLIO-WT-003', stockStatus: 'Out of Stock', type: 'Variable', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=200' }
+                ],
+
+                brandsList: [
+                    { id: 1, name: 'Lumina Audio', slug: 'lumina-audio', parent: 'None', thumb: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=100' },
+                    { id: 2, name: 'Apex Gear', slug: 'apex-gear', parent: 'None', thumb: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=100' }
+                ],
+
+                categoriesList: [
+                    { id: 1, name: 'Electronics', slug: 'electronics', parent: 'None', thumb: 'https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=100' },
+                    { id: 2, name: 'Accessories', slug: 'accessories', parent: 'None', thumb: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=100' },
+                    { id: 3, name: 'Apparel', slug: 'apparel', parent: 'None', thumb: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=100' }
+                ],
+
+                tagsList: [
+                    { id: 1, name: 'Featured Product', slug: 'featured-product', thumb: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=100' },
+                    { id: 2, name: 'Winter Sale', slug: 'winter-sale', thumb: 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&q=80&w=100' }
+                ],
+
+                // Form Models
+                newProduct: {
+                    name: '',
+                    shortDesc: '',
+                    description: '',
+                    category: 'Electronics',
+                    type: 'Simple',
+                    regularPrice: '',
+                    price: '',
+                    sku: '',
+                    stockStatus: 'In Stock',
+                    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=200'
+                },
+
+                newBrand: { name: '', slug: '', parent: 'None', description: '', thumb: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=100' },
+                newCategory: { name: '', slug: '', parent: 'None', description: '', thumb: 'https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=100' },
+                newTag: { name: '', slug: '', description: '', thumb: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=100' },
+                newMedia: { name: '', url: '' },
+
+                // Calculated Progress
+                completedChecklistCount() {
+                    return Object.values(this.checklist).filter(Boolean).length;
+                },
+
+                // Filters
+                get filteredMedia() {
+                    return this.mediaList.filter(item => {
+                        return item.name.toLowerCase().includes(this.mediaSearch.toLowerCase());
+                    });
+                },
+
+                get filteredProducts() {
+                    return this.productsList.filter(prod => {
+                        return prod.name.toLowerCase().includes(this.productSearch.toLowerCase()) ||
+                               prod.sku.toLowerCase().includes(this.productSearch.toLowerCase());
+                    });
+                },
+
+                // Actions & Event Handlers
+                handleRegister() {
+                    if (this.authForm.password !== this.authForm.confirmPassword) {
+                        this.showToast('Passwords do not match!', 'error');
+                        return;
+                    }
+                    this.isLoggedIn = true;
+                    this.showToast('Welcome to OlioCMS! Your account was registered.', 'success');
+                },
+
+                handleLogin() {
+                    this.isLoggedIn = true;
+                    this.showToast('Signed in successfully!', 'success');
+                },
+
+                handleLogout() {
+                    this.isLoggedIn = false;
+                    this.authView = 'login';
+                    this.showToast('Logged out of OlioCMS', 'info');
+                },
+
+                toggleTheme() {
+                    this.isDarkMode = !this.isDarkMode;
+                    if (this.isDarkMode) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                },
+
+                showToast(message, type = 'info') {
+                    const id = Date.now();
+                    this.toasts.push({ id, message, type, visible: true });
+                    setTimeout(() => {
+                        this.toasts = this.toasts.filter(t => t.id !== id);
+                    }, 3500);
+                },
+
+                saveProduct() {
+                    if (!this.newProduct.name) {
+                        this.showToast('Please specify a product name', 'error');
+                        return;
+                    }
+                    this.productsList.push({
+                        id: Date.now(),
+                        name: this.newProduct.name,
+                        category: this.newProduct.category,
+                        price: this.newProduct.price || '99.00',
+                        sku: this.newProduct.sku || 'OLIO-NEW-100',
+                        stockStatus: this.newProduct.stockStatus,
+                        type: this.newProduct.type,
+                        image: this.newProduct.image
+                    });
+                    this.checklist.firstProduct = true;
+                    this.productTab = 'all';
+                    this.productStage = 1;
+                    this.showToast('New product created & synchronized with GraphQL API', 'success');
+                },
+
+                deleteProduct(id) {
+                    this.productsList = this.productsList.filter(p => p.id !== id);
+                    this.showToast('Product removed from store', 'info');
+                },
+
+                saveBrand() {
+                    if (!this.newBrand.name) return;
+                    this.brandsList.push({ id: Date.now(), ...this.newBrand });
+                    this.checklist.brands = true;
+                    this.newBrand = { name: '', slug: '', parent: 'None', description: '', thumb: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=100' };
+                    this.showToast('Brand added successfully', 'success');
+                },
+
+                deleteBrand(id) {
+                    this.brandsList = this.brandsList.filter(b => b.id !== id);
+                    this.showToast('Brand deleted', 'info');
+                },
+
+                saveCategory() {
+                    if (!this.newCategory.name) return;
+                    this.categoriesList.push({ id: Date.now(), ...this.newCategory });
+                    this.checklist.categories = true;
+                    this.newCategory = { name: '', slug: '', parent: 'None', description: '', thumb: 'https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=100' };
+                    this.showToast('Category added successfully', 'success');
+                },
+
+                deleteCategory(id) {
+                    this.categoriesList = this.categoriesList.filter(c => c.id !== id);
+                    this.showToast('Category deleted', 'info');
+                },
+
+                saveTag() {
+                    if (!this.newTag.name) return;
+                    this.tagsList.push({ id: Date.now(), ...this.newTag });
+                    this.checklist.tags = true;
+                    this.newTag = { name: '', slug: '', description: '', thumb: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=100' };
+                    this.showToast('Tag added successfully', 'success');
+                },
+
+                deleteTag(id) {
+                    this.tagsList = this.tagsList.filter(t => t.id !== id);
+                    this.showToast('Tag deleted', 'info');
+                },
+
+                uploadMedia() {
+                    if (!this.newMedia.name || !this.newMedia.url) return;
+                    this.mediaList.unshift({
+                        id: Date.now(),
+                        name: this.newMedia.name + '.jpg',
+                        url: this.newMedia.url,
+                        size: '1.4 MB',
+                        format: 'jpg'
+                    });
+                    this.showMediaModal = false;
+                    this.newMedia = { name: '', url: '' };
+                    this.showToast('Media file uploaded', 'success');
+                },
+
+                deleteMedia(id) {
+                    this.mediaList = this.mediaList.filter(m => m.id !== id);
+                    this.showToast('Media asset removed', 'info');
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnpm-store
+
+# testing
+/coverage
+
+# next.js build output
+/.next/
+/out/
+
+# production build
+/build
+/dist
+
+# misc
+.DS_Store
+*.pem
+Thumbs.db
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# debug & server logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# local env files
+.env
+.env*.local
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE / Editors
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvsproject
+*.njsproj
+*.sln
+*.sw?

@@ -6,7 +6,6 @@
     "dev": "next dev",
     "build": "next build",
     "deploy": "next build",
-    "deploy:cf": "next build && npx wrangler pages deploy out",
     "start": "next start",
     "lint": "next lint"
   },

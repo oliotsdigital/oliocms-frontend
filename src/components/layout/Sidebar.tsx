@@ -9,9 +9,10 @@ import { useOlio } from "@/state/OlioProvider";
 interface SidebarProps {
   user: UserSession | null;
   onLogout: () => void;
+  isFirstWebsiteModalOpen?: boolean;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isFirstWebsiteModalOpen }) => {
   const pathname = usePathname();
   const { theme } = useOlio();
   const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(false);
@@ -27,15 +28,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
         setSidebarExpanded(false);
         setProductsHover(false);
       }}
-      className={`fixed top-0 left-0 h-full z-40 glass-panel transition-all duration-300 ease-in-out flex flex-col border-r border-slate-200/50 dark:border-slate-800/50 hidden md:flex ${
+      className={`fixed top-0 left-0 h-full glass-panel transition-all duration-300 ease-in-out flex flex-col border-r border-slate-200/50 dark:border-slate-800/50 hidden md:flex ${
+        isFirstWebsiteModalOpen ? "z-[110]" : "z-40"
+      } ${
         sidebarExpanded ? "w-60 shadow-2xl" : "w-16"
       }`}
     >
       {/* Top Logo Header */}
-      <div className="h-16 flex items-center px-4 justify-center overflow-hidden border-b border-slate-200/30 dark:border-slate-800/30">
+      <div
+        className={`h-16 flex items-center px-4 justify-center overflow-hidden border-b border-slate-200/30 dark:border-slate-800/30 ${
+          isFirstWebsiteModalOpen ? "pointer-events-none opacity-60" : ""
+        }`}
+      >
         <Link href="/dashboard" className="w-full flex items-center justify-center">
           {sidebarExpanded ? (
-            /* Expanded Logo: centered with equal left & right margin and balanced height */
+            /* Expanded Logo */
             <div className="w-full flex items-center justify-center px-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -43,12 +50,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
                 alt="OlioCMS Logo"
                 className="h-8 md:h-9 w-auto max-w-[180px] object-contain object-center mx-auto"
                 onError={(e) => {
-                  // Fallback rendering if image file is not found
                   e.currentTarget.style.display = "none";
                   const parent = e.currentTarget.parentElement;
                   if (parent && !parent.querySelector(".logo-fallback")) {
                     const fallback = document.createElement("div");
-                    fallback.className = "logo-fallback flex items-center justify-center gap-2 font-bold text-sm text-slate-900 dark:text-white mx-auto";
+                    fallback.className =
+                      "logo-fallback flex items-center justify-center gap-2 font-bold text-sm text-slate-900 dark:text-white mx-auto";
                     fallback.innerHTML = `<div class="w-8 h-8 rounded-xl bg-brand-500 flex items-center justify-center text-white"><i class="fa-solid fa-cubes"></i></div> <span>Olio<span class="text-brand-500">CMS</span></span>`;
                     parent.appendChild(fallback);
                   }
@@ -63,12 +70,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
               alt="Olioverse Icon"
               className="w-8 h-8 md:w-9 md:h-9 object-contain mx-auto"
               onError={(e) => {
-                // Fallback rendering if icon file is not found
                 e.currentTarget.style.display = "none";
                 const parent = e.currentTarget.parentElement;
                 if (parent && !parent.querySelector(".icon-fallback")) {
                   const fallback = document.createElement("div");
-                  fallback.className = "icon-fallback w-8 h-8 rounded-xl bg-brand-500 flex items-center justify-center text-white font-bold text-xs mx-auto";
+                  fallback.className =
+                    "icon-fallback w-8 h-8 rounded-xl bg-brand-500 flex items-center justify-center text-white font-bold text-xs mx-auto";
                   fallback.innerHTML = `<i class="fa-solid fa-cubes"></i>`;
                   parent.appendChild(fallback);
                 }
@@ -78,8 +85,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
         </Link>
       </div>
 
-      {/* Navigation Links */}
-      <nav className="flex-1 py-4 px-2.5 space-y-1.5 overflow-y-auto">
+      {/* Navigation Links (Disabled when First Website Popup is open) */}
+      <nav
+        className={`flex-1 py-4 px-2.5 space-y-1.5 overflow-y-auto ${
+          isFirstWebsiteModalOpen
+            ? "pointer-events-none opacity-40 select-none"
+            : ""
+        }`}
+      >
         {/* Dashboard */}
         <Link
           href="/dashboard"
@@ -122,7 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
         <div className="relative">
           <Link
             href="/products"
-            onMouseEnter={() => setProductsHover(true)}
+            onMouseEnter={() => !isFirstWebsiteModalOpen && setProductsHover(true)}
             className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group relative ${
               isNavActive("/products")
                 ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
@@ -146,7 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
             ></i>
           </Link>
 
-          {productsHover && sidebarExpanded && (
+          {productsHover && sidebarExpanded && !isFirstWebsiteModalOpen && (
             <div className="pl-9 pr-2 py-1 space-y-1 mt-1 transition-all">
               <Link
                 href="/products"
@@ -161,7 +174,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
               <Link
                 href="/products?action=add"
                 className={`block w-full text-left py-1 px-2.5 rounded-lg text-[11px] transition ${
-                  pathname === "/products" && typeof window !== "undefined" && window.location.search.includes("add")
+                  pathname === "/products" &&
+                  typeof window !== "undefined" &&
+                  window.location.search.includes("add")
                     ? "text-brand-500 font-bold"
                     : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
                 }`}
@@ -230,17 +245,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
         </Link>
       </nav>
 
-      {/* Bottom Profile Icon Section */}
-      <div className="p-2 border-t border-slate-200/30 dark:border-slate-800/30 relative">
+      {/* Bottom Profile Icon Section (ALWAYS ENABLED) */}
+      <div className="p-2 border-t border-slate-200/30 dark:border-slate-800/30 relative pointer-events-auto">
         <button
           onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-          className="w-full flex items-center gap-3 p-2 rounded-xl glass-card hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition"
+          className="w-full flex items-center gap-3 p-2 rounded-xl glass-card hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition ring-1 ring-brand-500/20 shadow-sm"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={user?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150"}
+            src={
+              user?.avatar ||
+              "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150"
+            }
             alt="User Profile"
-            className="w-8 h-8 rounded-lg object-cover ring-2 ring-brand-500/30"
+            className="w-8 h-8 rounded-lg object-cover ring-2 ring-brand-500/50"
           />
           <div
             className={`text-left overflow-hidden transition-opacity duration-200 ${

@@ -31,6 +31,7 @@ export default function RegisterPage() {
         <RegisterFormCard
           authForm={auth.authForm}
           isDarkMode={theme.isDarkMode}
+          isLoading={auth.isLoading}
           onFormChange={auth.updateAuthForm}
           onSubmit={handleSubmit}
           onToggleTheme={theme.toggleTheme}

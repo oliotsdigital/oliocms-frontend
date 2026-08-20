@@ -8,6 +8,7 @@ import { Header } from "./Header";
 import { MobileHeader } from "./MobileHeader";
 import { MobileDrawer } from "./MobileDrawer";
 import { ToastContainer } from "./ToastContainer";
+import { FirstWebsiteModal } from "./FirstWebsiteModal";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -23,7 +24,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   onSearchChange,
 }) => {
   const router = useRouter();
-  const { auth, theme, toast } = useOlio();
+  const { auth, theme, toast, projectState } = useOlio();
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
   useEffect(() => {
@@ -40,11 +41,21 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     );
   }
 
+  // If projects finish loading and user has 0 websites, force the First Website Modal
+  const showFirstWebsiteModal = !projectState.isLoading && projectState.projects.length === 0;
+
   return (
     <div className="relative z-10 min-h-screen flex flex-col md:flex-row">
       <ToastContainer toasts={toast.toasts} />
 
-      <Sidebar user={auth.user} onLogout={auth.handleLogout} />
+      {/* Mandatory First Website Setup Modal for first-time users */}
+      {showFirstWebsiteModal && <FirstWebsiteModal onLogout={auth.handleLogout} />}
+
+      <Sidebar
+        user={auth.user}
+        onLogout={auth.handleLogout}
+        isFirstWebsiteModalOpen={showFirstWebsiteModal}
+      />
       <MobileHeader
         isDarkMode={theme.isDarkMode}
         onToggleTheme={theme.toggleTheme}
@@ -54,6 +65,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         isOpen={mobileMenuOpen}
         onClose={() => setMobileMenuOpen(false)}
         onLogout={auth.handleLogout}
+        isFirstWebsiteModalOpen={showFirstWebsiteModal}
       />
 
       <main className="flex-1 md:ml-16 transition-all duration-300 p-4 md:p-8 overflow-y-auto min-h-screen">

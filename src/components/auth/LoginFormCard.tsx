@@ -6,6 +6,7 @@ import { AuthForm } from "@/models/auth.model";
 interface LoginFormCardProps {
   authForm: AuthForm;
   isDarkMode: boolean;
+  isLoading?: boolean;
   onFormChange: (fields: Partial<AuthForm>) => void;
   onSubmit: (e: React.FormEvent) => void;
   onToggleTheme: () => void;
@@ -16,6 +17,7 @@ interface LoginFormCardProps {
 export const LoginFormCard: React.FC<LoginFormCardProps> = ({
   authForm,
   isDarkMode,
+  isLoading = false,
   onFormChange,
   onSubmit,
   onToggleTheme,
@@ -81,7 +83,8 @@ export const LoginFormCard: React.FC<LoginFormCardProps> = ({
                 onChange={(e) => onFormChange({ email: e.target.value })}
                 required
                 placeholder="admin@oliocms.io"
-                className="w-full pl-9 pr-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white placeholder-slate-400"
+                disabled={isLoading}
+                className="w-full pl-9 pr-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white placeholder-slate-400 disabled:opacity-50"
               />
             </div>
           </div>
@@ -107,17 +110,28 @@ export const LoginFormCard: React.FC<LoginFormCardProps> = ({
                 onChange={(e) => onFormChange({ password: e.target.value })}
                 required
                 placeholder="••••••••"
-                className="w-full pl-9 pr-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white placeholder-slate-400"
+                disabled={isLoading}
+                className="w-full pl-9 pr-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white placeholder-slate-400 disabled:opacity-50"
               />
             </div>
           </div>
 
           <button
             type="submit"
-            className="w-full py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs shadow-lg shadow-brand-500/25 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 mt-2"
+            disabled={isLoading}
+            className="w-full py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs shadow-lg shadow-brand-500/25 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
           >
-            <span>Sign In</span>
-            <i className="fa-solid fa-right-to-bracket text-xs"></i>
+            {isLoading ? (
+              <>
+                <i className="fa-solid fa-circle-notch fa-spin text-xs"></i>
+                <span>Signing In...</span>
+              </>
+            ) : (
+              <>
+                <span>Sign In</span>
+                <i className="fa-solid fa-right-to-bracket text-xs"></i>
+              </>
+            )}
           </button>
         </form>
 

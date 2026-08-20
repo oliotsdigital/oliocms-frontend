@@ -11,6 +11,7 @@ import { useBrandState } from "./useBrandState";
 import { useTagState } from "./useTagState";
 import { useMediaState } from "./useMediaState";
 import { useProfileState } from "./useProfileState";
+import { useProjectState } from "./useProjectState";
 
 type OlioContextType = {
   toast: ReturnType<typeof useToastState>;
@@ -23,6 +24,7 @@ type OlioContextType = {
   tags: ReturnType<typeof useTagState>;
   media: ReturnType<typeof useMediaState>;
   profile: ReturnType<typeof useProfileState>;
+  projectState: ReturnType<typeof useProjectState>;
 };
 
 const OlioContext = createContext<OlioContextType | null>(null);
@@ -33,6 +35,7 @@ export function OlioProvider({ children }: { children: React.ReactNode }) {
   const checklist = useChecklistState();
 
   const auth = useAuthStore(toast.showToast);
+  const projectState = useProjectState(toast.showToast);
 
   const profile = useProfileState(toast.showToast, () => {
     checklist.markCompleted("profile");
@@ -69,6 +72,7 @@ export function OlioProvider({ children }: { children: React.ReactNode }) {
         tags,
         media,
         profile,
+        projectState,
       }}
     >
       {children}

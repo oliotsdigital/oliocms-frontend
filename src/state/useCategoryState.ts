@@ -19,7 +19,18 @@ export function useCategoryState(
   });
 
   useEffect(() => {
-    fetchCategoriesApi(selectedProjectId).then((data) => setCategoriesList(data));
+    if (!selectedProjectId) {
+      setCategoriesList([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchCategoriesApi(selectedProjectId).then((data) => {
+      if (!cancelled) setCategoriesList(data);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedProjectId]);
 
   const updateNewCategoryForm = (fields: Partial<NewCategoryForm>) => {

@@ -37,7 +37,7 @@ export function OlioProvider({ children }: { children: React.ReactNode }) {
   const checklist = useChecklistState();
 
   const auth = useAuthStore(toast.showToast);
-  const projectState = useProjectState(toast.showToast, auth.isLoggedIn);
+  const projectState = useProjectState(toast.showToast, auth.isLoggedIn, auth.isInitializing);
   const activeProjectId = projectState.selectedProject?.id;
 
   const collectionsState = useCollectionState(activeProjectId);

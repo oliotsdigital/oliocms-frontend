@@ -18,7 +18,18 @@ export function useTagState(
   });
 
   useEffect(() => {
-    fetchTagsApi(selectedProjectId).then((data) => setTagsList(data));
+    if (!selectedProjectId) {
+      setTagsList([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchTagsApi(selectedProjectId).then((data) => {
+      if (!cancelled) setTagsList(data);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedProjectId]);
 
   const updateNewTagForm = (fields: Partial<NewTagForm>) => {

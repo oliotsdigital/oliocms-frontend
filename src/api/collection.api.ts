@@ -1,92 +1,20 @@
 import { APP_CONFIG } from "@/config/app.config";
-import { getAuthHeaders } from "./auth.api";
+import { apiFetch, getAuthHeaders } from "./client";
 import { logger } from "@/utils/logger";
 import {
   CollectionSchema,
   CollectionRecord,
   CreateCollectionPayload,
-  CreateRecordPayload,
 } from "@/models/collection.model";
 
 const API_BASE_URL = APP_CONFIG.apiBaseUrl;
 
-// Fallback in-memory state for offline/demo operation
-const MOCK_COLLECTIONS: CollectionSchema[] = [
-  {
-    id: "col_articles_01",
-    tenant_id: "ten_default",
-    name: "Blog Articles",
-    slug: "blog-articles",
-    schema_definition: [
-      { name: "title", label: "Article Title", type: "string", validation: { required: true } },
-      { name: "author", label: "Author Name", type: "string", validation: { required: true } },
-      { name: "read_time_mins", label: "Read Time (mins)", type: "number", validation: { required: false } },
-      { name: "is_published", label: "Published", type: "boolean", validation: { required: true } },
-    ],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: "col_inventory_02",
-    tenant_id: "ten_default",
-    name: "Store Inventory",
-    slug: "store-inventory",
-    schema_definition: [
-      { name: "product_sku", label: "Product SKU", type: "string", validation: { required: true, unique: true } },
-      { name: "price", label: "Unit Price ($)", type: "number", validation: { required: true } },
-      { name: "stock_quantity", label: "Stock Quantity", type: "number", validation: { required: true } },
-      { name: "in_stock", label: "In Stock", type: "boolean", validation: { required: true } },
-    ],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const MOCK_RECORDS: Record<string, CollectionRecord[]> = {
-  col_articles_01: [
-    {
-      id: "rec_art_101",
-      tenant_id: "ten_default",
-      collection_id: "col_articles_01",
-      data: {
-        title: "Building Modern Headless Architecture with Next.js 14 & FastAPI",
-        author: "Alex Morgan",
-        read_time_mins: 8,
-        is_published: true,
-      },
-      created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
-      updated_at: new Date(Date.now() - 3600000 * 24).toISOString(),
-    },
-    {
-      id: "rec_art_102",
-      tenant_id: "ten_default",
-      collection_id: "col_articles_01",
-      data: {
-        title: "Metadata-Driven JSONB Patterns in PostgreSQL",
-        author: "Sourabh Pujari",
-        read_time_mins: 12,
-        is_published: true,
-      },
-      created_at: new Date(Date.now() - 3600000 * 12).toISOString(),
-      updated_at: new Date(Date.now() - 3600000 * 12).toISOString(),
-    },
-  ],
-  col_inventory_02: [
-    {
-      id: "rec_inv_201",
-      tenant_id: "ten_default",
-      collection_id: "col_inventory_02",
-      data: {
-        product_sku: "OLIO-PROD-001",
-        price: 199.99,
-        stock_quantity: 45,
-        in_stock: true,
-      },
-      created_at: new Date(Date.now() - 3600000 * 48).toISOString(),
-      updated_at: new Date(Date.now() - 3600000 * 48).toISOString(),
-    },
-  ],
-};
+function isUuid(value: string | undefined | null): value is string {
+  return Boolean(value && UUID_RE.test(value));
+}
 
 export async function fetchCollectionsApi(projectId?: string): Promise<CollectionSchema[]> {
   const selectedProjId =
@@ -95,12 +23,15 @@ export async function fetchCollectionsApi(projectId?: string): Promise<Collectio
       ? localStorage.getItem("selected_project_id") || sessionStorage.getItem("selected_project_id")
       : null);
 
-  logger.info(`Fetching collection schemas for project ${selectedProjId || "all"}...`);
+  if (!selectedProjId) {
+    logger.info("Skipping collections fetch; no project selected.");
+    return [];
+  }
+
+  logger.info(`Fetching collection schemas for project ${selectedProjId}...`);
   try {
-    const url = selectedProjId
-      ? `${API_BASE_URL}/collections?project_id=${selectedProjId}`
-      : `${API_BASE_URL}/collections`;
-    const res = await fetch(url, {
+    const url = `${API_BASE_URL}/collections?project_id=${selectedProjId}`;
+    const res = await apiFetch(url, {
       headers: getAuthHeaders(),
     });
     if (res.ok) {
@@ -110,25 +41,25 @@ export async function fetchCollectionsApi(projectId?: string): Promise<Collectio
         logger.success(`Fetched ${items.length} collection schemas from API.`);
         return items;
       }
+    } else {
+      logger.warn(`Failed to fetch collections (Status: ${res.status})`);
     }
   } catch (err) {
-    logger.warn("Using offline fallback collections due to network issue:", err);
+    logger.warn("Failed to fetch collections from API:", err);
   }
-
-  if (selectedProjId) {
-    return MOCK_COLLECTIONS.filter(
-      (c) => !c.project_id || c.project_id === selectedProjId || c.project_id === "proj_default"
-    );
-  }
-  return MOCK_COLLECTIONS;
+  return [];
 }
 
 export async function fetchCollectionSchemaApi(
   collectionId: string
 ): Promise<CollectionSchema | null> {
+  if (!isUuid(collectionId)) {
+    logger.warn(`Skipping collection schema fetch; id is not a UUID: ${collectionId}`);
+    return null;
+  }
   logger.info(`Fetching collection schema details for ID: ${collectionId}`);
   try {
-    const res = await fetch(`${API_BASE_URL}/collections/${collectionId}`, {
+    const res = await apiFetch(`${API_BASE_URL}/collections/${collectionId}`, {
       headers: getAuthHeaders(),
     });
     if (res.ok) {
@@ -138,7 +69,7 @@ export async function fetchCollectionSchemaApi(
   } catch (err) {
     logger.warn(`Failed to fetch collection schema ${collectionId} from API:`, err);
   }
-  return MOCK_COLLECTIONS.find((c) => c.id === collectionId) || null;
+  return null;
 }
 
 export async function createCollectionSchemaApi(
@@ -155,7 +86,7 @@ export async function createCollectionSchemaApi(
 
   logger.info("Creating collection schema...", fullPayload);
   try {
-    const res = await fetch(`${API_BASE_URL}/collections`, {
+    const res = await apiFetch(`${API_BASE_URL}/collections`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify(fullPayload),
@@ -172,19 +103,8 @@ export async function createCollectionSchemaApi(
       return { error: errMsg };
     }
   } catch (err: any) {
-    logger.warn("Offline creating mock collection schema:", err);
-    const newCol: CollectionSchema = {
-      id: `col_${Date.now()}`,
-      tenant_id: "ten_default",
-      project_id: fullPayload.project_id || "proj_default",
-      name: payload.name,
-      slug: payload.slug || payload.name.toLowerCase().replace(/\s+/g, "-"),
-      schema_definition: payload.schema_definition,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    MOCK_COLLECTIONS.unshift(newCol);
-    return { collection: newCol };
+    logger.error("Network error creating collection schema:", err);
+    return { error: err?.message || "Network error creating collection schema" };
   }
 }
 
@@ -194,7 +114,7 @@ export async function updateCollectionSchemaApi(
 ): Promise<{ collection?: CollectionSchema; error?: string }> {
   logger.info(`Updating collection schema ID: ${collectionId}...`, payload);
   try {
-    const res = await fetch(`${API_BASE_URL}/collections/${collectionId}`, {
+    const res = await apiFetch(`${API_BASE_URL}/collections/${collectionId}`, {
       method: "PUT",
       headers: getAuthHeaders(),
       body: JSON.stringify(payload),
@@ -211,14 +131,8 @@ export async function updateCollectionSchemaApi(
       return { error: errMsg };
     }
   } catch (err: any) {
-    logger.warn("Offline updating mock collection schema:", err);
-    const col = MOCK_COLLECTIONS.find((c) => c.id === collectionId);
-    if (col) {
-      if (payload.name) col.name = payload.name;
-      if (payload.schema_definition) col.schema_definition = payload.schema_definition;
-      return { collection: col };
-    }
-    return { error: "Collection schema not found" };
+    logger.error("Network error updating collection schema:", err);
+    return { error: err?.message || "Network error updating collection schema" };
   }
 }
 
@@ -226,7 +140,7 @@ export async function deleteCollectionSchemaApi(
   collectionId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const res = await fetch(`${API_BASE_URL}/collections/${collectionId}`, {
+    const res = await apiFetch(`${API_BASE_URL}/collections/${collectionId}`, {
       method: "DELETE",
       headers: getAuthHeaders(),
     });
@@ -236,9 +150,8 @@ export async function deleteCollectionSchemaApi(
     const data = await res.json().catch(() => ({}));
     return { success: false, error: data.error || data.detail || "Failed to delete schema" };
   } catch (err: any) {
-    const idx = MOCK_COLLECTIONS.findIndex((c) => c.id === collectionId);
-    if (idx !== -1) MOCK_COLLECTIONS.splice(idx, 1);
-    return { success: true };
+    logger.error("Network error deleting collection schema:", err);
+    return { success: false, error: err?.message || "Network error deleting collection schema" };
   }
 }
 
@@ -246,6 +159,10 @@ export async function fetchCollectionRecordsApi(
   collectionId: string,
   filters?: Record<string, string>
 ): Promise<CollectionRecord[]> {
+  if (!isUuid(collectionId)) {
+    logger.warn(`Skipping collection records fetch; id is not a UUID: ${collectionId}`);
+    return [];
+  }
   logger.info(`Fetching records for collection ${collectionId}...`, filters);
   try {
     const queryParams = new URLSearchParams();
@@ -254,7 +171,7 @@ export async function fetchCollectionRecordsApi(
         if (v !== undefined && v !== "") queryParams.append(k, v);
       });
     }
-    const res = await fetch(`${API_BASE_URL}/collections/${collectionId}/records?${queryParams}`, {
+    const res = await apiFetch(`${API_BASE_URL}/collections/${collectionId}/records?${queryParams}`, {
       headers: getAuthHeaders(),
     });
     if (res.ok) {
@@ -266,9 +183,9 @@ export async function fetchCollectionRecordsApi(
       }
     }
   } catch (err) {
-    logger.warn("Using fallback offline collection records:", err);
+    logger.warn("Failed to fetch collection records from API:", err);
   }
-  return MOCK_RECORDS[collectionId] || [];
+  return [];
 }
 
 export async function createCollectionRecordApi(
@@ -277,7 +194,7 @@ export async function createCollectionRecordApi(
 ): Promise<{ record?: CollectionRecord; error?: string }> {
   logger.info(`Ingesting record for collection ${collectionId}`, data);
   try {
-    const res = await fetch(`${API_BASE_URL}/collections/${collectionId}/records`, {
+    const res = await apiFetch(`${API_BASE_URL}/collections/${collectionId}/records`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ data }),
@@ -294,18 +211,8 @@ export async function createCollectionRecordApi(
       return { error: errMsg };
     }
   } catch (err: any) {
-    logger.warn("Offline creating mock collection record:", err);
-    const newRec: CollectionRecord = {
-      id: `rec_${Date.now()}`,
-      tenant_id: "ten_default",
-      collection_id: collectionId,
-      data,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    if (!MOCK_RECORDS[collectionId]) MOCK_RECORDS[collectionId] = [];
-    MOCK_RECORDS[collectionId].unshift(newRec);
-    return { record: newRec };
+    logger.error("Network error creating collection record:", err);
+    return { error: err?.message || "Network error creating collection record" };
   }
 }
 
@@ -314,18 +221,17 @@ export async function deleteCollectionRecordApi(
   recordId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const res = await fetch(`${API_BASE_URL}/collections/${collectionId}/records/${recordId}`, {
+    const res = await apiFetch(`${API_BASE_URL}/collections/${collectionId}/records/${recordId}`, {
       method: "DELETE",
       headers: getAuthHeaders(),
     });
     if (res.ok || res.status === 204) {
       return { success: true };
     }
-  } catch (err) {
-    // Offline fallback delete
-    if (MOCK_RECORDS[collectionId]) {
-      MOCK_RECORDS[collectionId] = MOCK_RECORDS[collectionId].filter((r) => r.id !== recordId);
-    }
+    const data = await res.json().catch(() => ({}));
+    return { success: false, error: data.error || data.detail || "Failed to delete record" };
+  } catch (err: any) {
+    logger.error("Network error deleting collection record:", err);
+    return { success: false, error: err?.message || "Network error deleting collection record" };
   }
-  return { success: true };
 }

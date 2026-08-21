@@ -1,44 +1,14 @@
 import { AuthForm, AuthResponse, UserSession } from "@/models/auth.model";
 import { APP_CONFIG } from "@/config/app.config";
 import { logger } from "@/utils/logger";
+import { apiFetch, getAuthHeaders } from "./client";
+
+export { getAuthHeaders };
 
 const API_BASE_URL = APP_CONFIG.apiBaseUrl;
 
 const DEFAULT_AVATAR =
   "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150";
-
-/**
- * Returns standard headers required for all authenticated API endpoints:
- * - Authorization: Bearer <supabase_access_token>
- * - X-Tenant-Id: <tenant_id>
- * - X-Project-Id: <selected_project_id>
- */
-export function getAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (typeof window !== "undefined") {
-    const token =
-      localStorage.getItem("supabase_access_token") ||
-      sessionStorage.getItem("supabase_access_token");
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-    const tenantId =
-      localStorage.getItem("tenant_id") ||
-      sessionStorage.getItem("tenant_id");
-    if (tenantId) {
-      headers["X-Tenant-Id"] = tenantId;
-    }
-    const projectId =
-      localStorage.getItem("selected_project_id") ||
-      sessionStorage.getItem("selected_project_id");
-    if (projectId) {
-      headers["X-Project-Id"] = projectId;
-    }
-  }
-  return headers;
-}
 
 
 export async function loginApi(form: AuthForm): Promise<AuthResponse> {
@@ -217,7 +187,7 @@ export async function logoutApi(): Promise<{ success: boolean }> {
 export async function changePasswordApi(newPassword: string): Promise<{ success: boolean; message?: string }> {
   logger.info("Requesting password change...");
   try {
-    const res = await fetch(`${API_BASE_URL}/auth/change-password`, {
+    const res = await apiFetch(`${API_BASE_URL}/auth/change-password`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ new_password: newPassword }),

@@ -19,7 +19,18 @@ export function useBrandState(
   });
 
   useEffect(() => {
-    fetchBrandsApi(selectedProjectId).then((data) => setBrandsList(data));
+    if (!selectedProjectId) {
+      setBrandsList([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchBrandsApi(selectedProjectId).then((data) => {
+      if (!cancelled) setBrandsList(data);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedProjectId]);
 
   const updateNewBrandForm = (fields: Partial<NewBrandForm>) => {

@@ -216,11 +216,11 @@ export const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
             >
               {submitting ? (
                 <>
-                  <i className="fa-solid fa-spinner fa-spin text-xs"></i> Saving Record...
+                  <i className="fa-solid fa-spinner fa-spin text-xs"></i> Saving {schema.name}...
                 </>
               ) : (
                 <>
-                  <i className="fa-solid fa-check text-xs"></i> Ingest Record
+                  <i className="fa-solid fa-check text-xs"></i> Add {schema.name}
                 </>
               )}
             </button>

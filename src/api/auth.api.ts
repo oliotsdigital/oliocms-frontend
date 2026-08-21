@@ -214,3 +214,27 @@ export async function logoutApi(): Promise<{ success: boolean }> {
   return { success: true };
 }
 
+export async function changePasswordApi(newPassword: string): Promise<{ success: boolean; message?: string }> {
+  logger.info("Requesting password change...");
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ new_password: newPassword }),
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      logger.success("Password changed successfully.");
+      return { success: true, message: data.message || "Password updated successfully!" };
+    } else {
+      const errMsg = data.error || data.detail || "Failed to update password";
+      logger.warn("Password change failed:", errMsg);
+      return { success: false, message: errMsg };
+    }
+  } catch (err: any) {
+    logger.error("Network error during password change:", err);
+    return { success: false, message: err?.message || "Network error updating password." };
+  }
+}
+

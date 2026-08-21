@@ -188,6 +188,39 @@ export async function createCollectionSchemaApi(
   }
 }
 
+export async function updateCollectionSchemaApi(
+  collectionId: string,
+  payload: { name?: string; icon?: string; schema_definition?: any[] }
+): Promise<{ collection?: CollectionSchema; error?: string }> {
+  logger.info(`Updating collection schema ID: ${collectionId}...`, payload);
+  try {
+    const res = await fetch(`${API_BASE_URL}/collections/${collectionId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      logger.success("Collection schema updated successfully on API.", data);
+      return { collection: data };
+    } else {
+      const errMsg =
+        typeof data.detail === "string"
+          ? data.detail
+          : data.error || data.message || "Failed to update collection schema";
+      return { error: errMsg };
+    }
+  } catch (err: any) {
+    logger.warn("Offline updating mock collection schema:", err);
+    const col = MOCK_COLLECTIONS.find((c) => c.id === collectionId);
+    if (col) {
+      if (payload.name) col.name = payload.name;
+      if (payload.schema_definition) col.schema_definition = payload.schema_definition;
+      return { collection: col };
+    }
+    return { error: "Collection schema not found" };
+  }
+}
 
 export async function deleteCollectionSchemaApi(
   collectionId: string

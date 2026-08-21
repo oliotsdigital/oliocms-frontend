@@ -14,7 +14,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isFirstWebsiteModalOpen }) => {
   const pathname = usePathname();
-  const { theme } = useOlio();
+  const { theme, collectionsState } = useOlio();
   const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(false);
   const [productsHover, setProductsHover] = useState<boolean>(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState<boolean>(false);
@@ -130,6 +130,42 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isFirstWebsite
             Media
           </span>
         </Link>
+
+        {/* Section: Collections */}
+        <div className="pt-2 pb-1 px-3">
+          <p
+            className={`text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 transition-opacity duration-200 ${
+              sidebarExpanded ? "opacity-100" : "opacity-0 h-0 overflow-hidden"
+            }`}
+          >
+            Collections
+          </p>
+          {!sidebarExpanded && <div className="w-full h-px bg-slate-200/60 dark:bg-slate-800/60 my-1" />}
+        </div>
+
+        {/* Dynamic User Created Collection Links */}
+        {collectionsState.collections.map((col) => (
+          <Link
+            key={col.id}
+            href={`/collections/${col.id}`}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all group relative ${
+              pathname === `/collections/${col.id}`
+                ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <i className={`fa-solid ${col.icon || "fa-cube"} text-sm w-5 text-center ${
+              pathname === `/collections/${col.id}` ? "text-white" : "text-brand-500 group-hover:text-brand-400"
+            }`}></i>
+            <span
+              className={`whitespace-nowrap truncate transition-opacity duration-200 ${
+                sidebarExpanded ? "opacity-100" : "opacity-0 w-0 hidden"
+              }`}
+            >
+              {col.name}
+            </span>
+          </Link>
+        ))}
 
         {/* Section: Web Content */}
         <div className="pt-2 pb-1 px-3">

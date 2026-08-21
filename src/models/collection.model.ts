@@ -1,4 +1,19 @@
-export type FieldType = "string" | "number" | "boolean" | "relation";
+export type FieldType =
+  | "string"
+  | "number"
+  | "boolean"
+  | "relation"
+  | "richtext"
+  | "markdown"
+  | "json"
+  | "email"
+  | "date"
+  | "password"
+  | "media"
+  | "enumeration"
+  | "uid"
+  | "component"
+  | "dynamiczone";
 
 export interface FieldValidation {
   required?: boolean;
@@ -22,6 +37,7 @@ export interface CollectionSchema {
   project_id?: string;
   name: string;
   slug: string;
+  icon?: string;
   schema_definition: FieldDefinition[];
   is_deleted?: boolean;
   created_at: string;
@@ -42,6 +58,7 @@ export interface CreateCollectionPayload {
   project_id?: string;
   name: string;
   slug?: string;
+  icon?: string;
   schema_definition: FieldDefinition[];
 }
 

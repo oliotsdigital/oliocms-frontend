@@ -10,6 +10,25 @@ interface SchemaBuilderModalProps {
   onSuccess: () => void;
 }
 
+export const AVAILABLE_ICONS = [
+  { class: "fa-cube", label: "Cube" },
+  { class: "fa-box", label: "Product / Box" },
+  { class: "fa-layer-group", label: "Layer Group" },
+  { class: "fa-newspaper", label: "Articles / Blog" },
+  { class: "fa-cart-shopping", label: "Ecommerce" },
+  { class: "fa-users", label: "Users / Team" },
+  { class: "fa-folder", label: "Folder" },
+  { class: "fa-tag", label: "Tags" },
+  { class: "fa-star", label: "Reviews" },
+  { class: "fa-gear", label: "Settings" },
+  { class: "fa-comment", label: "Comments" },
+  { class: "fa-file-lines", label: "Documents" },
+  { class: "fa-images", label: "Media" },
+  { class: "fa-shield-halved", label: "Security" },
+  { class: "fa-calendar-days", label: "Schedule" },
+  { class: "fa-bullhorn", label: "Announcements" },
+];
+
 export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
   isOpen,
   onClose,
@@ -17,6 +36,7 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
 }) => {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [icon, setIcon] = useState("fa-cube");
   const [fields, setFields] = useState<FieldDefinition[]>([
     {
       name: "title",
@@ -111,6 +131,7 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
     const res = await createCollectionSchemaApi({
       name: name.trim(),
       slug: slug.trim() || undefined,
+      icon,
       schema_definition: fields,
     });
     setLoading(false);
@@ -171,7 +192,7 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Collection Slug
+                URL Slug
               </label>
               <input
                 type="text"

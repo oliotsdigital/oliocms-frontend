@@ -17,11 +17,15 @@ export function getAuthHeaders(): Record<string, string> {
     "Content-Type": "application/json",
   };
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("supabase_access_token");
+    const token =
+      localStorage.getItem("supabase_access_token") ||
+      sessionStorage.getItem("supabase_access_token");
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
-    const tenantId = localStorage.getItem("tenant_id");
+    const tenantId =
+      localStorage.getItem("tenant_id") ||
+      sessionStorage.getItem("tenant_id");
     if (tenantId) {
       headers["X-Tenant-Id"] = tenantId;
     }
@@ -60,12 +64,15 @@ export async function loginApi(form: AuthForm): Promise<AuthResponse> {
     if (typeof window !== "undefined") {
       if (data.access_token) {
         localStorage.setItem("supabase_access_token", data.access_token);
+        sessionStorage.setItem("supabase_access_token", data.access_token);
       }
       if (data.refresh_token) {
         localStorage.setItem("supabase_refresh_token", data.refresh_token);
+        sessionStorage.setItem("supabase_refresh_token", data.refresh_token);
       }
       if (tenantId) {
         localStorage.setItem("tenant_id", tenantId);
+        sessionStorage.setItem("tenant_id", tenantId);
       }
     }
 
@@ -129,12 +136,15 @@ export async function registerApi(form: AuthForm): Promise<AuthResponse> {
     if (typeof window !== "undefined") {
       if (sessionData?.access_token) {
         localStorage.setItem("supabase_access_token", sessionData.access_token);
+        sessionStorage.setItem("supabase_access_token", sessionData.access_token);
       }
       if (sessionData?.refresh_token) {
         localStorage.setItem("supabase_refresh_token", sessionData.refresh_token);
+        sessionStorage.setItem("supabase_refresh_token", sessionData.refresh_token);
       }
       if (tenantId) {
         localStorage.setItem("tenant_id", tenantId);
+        sessionStorage.setItem("tenant_id", tenantId);
       }
     }
 
@@ -167,7 +177,9 @@ export async function registerApi(form: AuthForm): Promise<AuthResponse> {
 export async function logoutApi(): Promise<{ success: boolean }> {
   logger.info("Logging out current session...");
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("supabase_access_token");
+    const token =
+      localStorage.getItem("supabase_access_token") ||
+      sessionStorage.getItem("supabase_access_token");
     if (token) {
       try {
         await fetch(`${API_BASE_URL}/auth/logout`, {
@@ -178,10 +190,21 @@ export async function logoutApi(): Promise<{ success: boolean }> {
         // Ignore logout network errors
       }
     }
+
+    // Clear all auth, tokens, tenant, and project keys from localStorage
     localStorage.removeItem("supabase_access_token");
     localStorage.removeItem("supabase_refresh_token");
     localStorage.removeItem("tenant_id");
+    localStorage.removeItem("selected_project_id");
+
+    // Clear all keys from sessionStorage
+    sessionStorage.removeItem("supabase_access_token");
+    sessionStorage.removeItem("supabase_refresh_token");
+    sessionStorage.removeItem("tenant_id");
+    sessionStorage.removeItem("selected_project_id");
+    sessionStorage.clear();
   }
-  logger.success("User logged out cleanly.");
+  logger.success("User logged out cleanly and browser session/local storage cleared.");
   return { success: true };
 }
+

@@ -19,13 +19,18 @@ export function useAuthStore(showToast?: (msg: string, type?: "success" | "info"
   // Restore stored session on client mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("supabase_access_token");
-      const tenantId = localStorage.getItem("tenant_id");
+      const token =
+        localStorage.getItem("supabase_access_token") ||
+        sessionStorage.getItem("supabase_access_token");
+      const tenantId =
+        localStorage.getItem("tenant_id") ||
+        sessionStorage.getItem("tenant_id");
       if (token && tenantId) {
         setIsLoggedIn(true);
       }
     }
   }, []);
+
 
   const updateAuthForm = (fields: Partial<AuthForm>) => {
     setAuthForm((prev) => ({ ...prev, ...fields }));

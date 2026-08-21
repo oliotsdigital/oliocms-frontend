@@ -115,7 +115,7 @@ export const FirstWebsiteModal: React.FC<FirstWebsiteModalProps> = ({ onLogout }
             Add Your First Website!
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Please add your first website to unlock your content dashboard.
+            to unlock your content dashboard.
           </p>
         </div>
 

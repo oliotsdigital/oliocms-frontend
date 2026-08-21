@@ -17,6 +17,81 @@ interface CollectionsStudioViewProps {
   selectedProjectId?: string;
 }
 
+interface CollectionItemCardProps {
+  col: CollectionSchema;
+  isSelected: boolean;
+  onSelect: (col: CollectionSchema) => void;
+  onDelete: (e: React.MouseEvent, id: string, name: string) => void;
+}
+
+const CollectionItemCard: React.FC<CollectionItemCardProps> = ({
+  col,
+  isSelected,
+  onSelect,
+  onDelete,
+}) => {
+  const [imgError, setImgError] = useState(false);
+  const hasFeaturedImage = !!col.featured_image && !imgError;
+
+  return (
+    <div
+      onClick={() => onSelect(col)}
+      className={`group cursor-pointer rounded-2xl p-3 transition-all duration-200 border flex items-center gap-3 ${
+        isSelected
+          ? "bg-brand-500/10 border-brand-500/50 shadow-lg shadow-brand-500/10 ring-1 ring-brand-500/30"
+          : "glass-panel border-slate-200/50 dark:border-slate-800/50 hover:border-brand-500/30"
+      }`}
+    >
+      {/* Featured Image to left side of collection name OR default icon if no image */}
+      <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-slate-200/80 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-sm">
+        {hasFeaturedImage ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={col.featured_image}
+            alt={col.name}
+            className="w-full h-full object-cover"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <i
+            className={`fa-solid ${col.icon || "fa-cube"} text-base ${
+              isSelected ? "text-brand-500" : "text-slate-500 dark:text-slate-400"
+            }`}
+          ></i>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <h4
+            className={`text-xs font-bold truncate ${
+              isSelected ? "text-brand-500" : "text-slate-900 dark:text-white"
+            }`}
+          >
+            {col.name}
+          </h4>
+        </div>
+        <p className="text-[11px] font-mono text-slate-400 dark:text-slate-500 truncate">
+          /{col.slug}
+        </p>
+        <div className="mt-1 flex items-center gap-2">
+          <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-600 dark:text-slate-400">
+            {col.schema_definition?.length || 0} fields
+          </span>
+        </div>
+      </div>
+
+      <button
+        onClick={(e) => onDelete(e, col.id, col.name)}
+        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition opacity-0 group-hover:opacity-100 shrink-0"
+        title="Delete Collection"
+      >
+        <i className="fa-solid fa-trash-can text-xs"></i>
+      </button>
+    </div>
+  );
+};
+
 export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
   collections,
   loading,
@@ -28,12 +103,15 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingCollectionForModal, setEditingCollectionForModal] = useState<CollectionSchema | null>(null);
   const [isAddFieldModalOpen, setIsAddFieldModalOpen] = useState(false);
   const [isIconModalOpen, setIsIconModalOpen] = useState(false);
 
   // Edit states for right-hand section
   const [editingName, setEditingName] = useState("");
   const [editingIcon, setEditingIcon] = useState("fa-cube");
+  const [editingFeaturedImage, setEditingFeaturedImage] = useState("");
   const [editingFields, setEditingFields] = useState<FieldDefinition[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showJsonPreview, setShowJsonPreview] = useState(false);
@@ -47,6 +125,7 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
         setSelectedId(targetCol.id);
         setEditingName(targetCol.name);
         setEditingIcon(targetCol.icon || "fa-cube");
+        setEditingFeaturedImage(targetCol.featured_image || "");
         setEditingFields(JSON.parse(JSON.stringify(targetCol.schema_definition || [])));
       } else {
         const currentExists = collections.some((c) => c.id === selectedId);
@@ -55,6 +134,7 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
           setSelectedId(first.id);
           setEditingName(first.name);
           setEditingIcon(first.icon || "fa-cube");
+          setEditingFeaturedImage(first.featured_image || "");
           setEditingFields(JSON.parse(JSON.stringify(first.schema_definition || [])));
         }
       }
@@ -62,6 +142,7 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
       setSelectedId(null);
       setEditingName("");
       setEditingIcon("fa-cube");
+      setEditingFeaturedImage("");
       setEditingFields([]);
     }
   }, [collections, urlId]);
@@ -71,12 +152,57 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
     setSelectedId(col.id);
     setEditingName(col.name);
     setEditingIcon(col.icon || "fa-cube");
+    setEditingFeaturedImage(col.featured_image || "");
     setEditingFields(JSON.parse(JSON.stringify(col.schema_definition || [])));
   };
 
-  const selectedCollection = collections.find((c) => c.id === selectedId);
+  const handleDeleteCollection = async (e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation();
+    if (!confirm(`Are you sure you want to delete the collection schema "${name}"?`)) return;
+    const res = await deleteCollectionSchemaApi(id);
+    if (res.error) {
+      if (toast) toast.showToast(res.error, "error");
+    } else {
+      if (toast) toast.showToast(`Collection "${name}" deleted successfully`, "success");
+      onRefresh();
+      collectionsState.refreshCollections();
+    }
+  };
 
-  // Filter collections by search input
+  const handleSaveSchema = async () => {
+    if (!selectedId) return;
+    if (!editingName.trim()) {
+      if (toast) toast.showToast("Collection name is required", "error");
+      return;
+    }
+
+    // Check duplicate keys
+    const keys = editingFields.map((f) => f.name.trim().toLowerCase());
+    const hasDuplicates = keys.some((k, idx) => keys.indexOf(k) !== idx);
+    if (hasDuplicates) {
+      if (toast) toast.showToast("Duplicate field keys detected in schema definition", "error");
+      return;
+    }
+
+    setIsSaving(true);
+    const res = await updateCollectionSchemaApi(selectedId, {
+      name: editingName.trim(),
+      icon: editingIcon,
+      featured_image: editingFeaturedImage,
+      schema_definition: editingFields,
+    });
+    setIsSaving(false);
+
+    if (res.error) {
+      if (toast) toast.showToast(res.error, "error");
+    } else {
+      if (toast) toast.showToast("Schema field definitions updated successfully!", "success");
+      onRefresh();
+      collectionsState.refreshCollections();
+    }
+  };
+
+  const selectedCollection = collections.find((c) => c.id === selectedId);
   const filteredCollections = collections.filter(
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -124,72 +250,30 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
     setEditingFields(updated);
   };
 
-  const handleSaveSchema = async () => {
-    if (!selectedId) return;
-    if (!editingName.trim()) {
-      if (toast) toast.showToast("Collection name is required", "error");
-      return;
-    }
-
-    // Check duplicate keys
-    const keys = editingFields.map((f) => f.name.trim().toLowerCase());
-    const hasDuplicates = keys.some((k, idx) => keys.indexOf(k) !== idx);
-    if (hasDuplicates) {
-      if (toast) toast.showToast("Duplicate field keys detected in schema definition", "error");
-      return;
-    }
-
-    setIsSaving(true);
-    const res = await updateCollectionSchemaApi(selectedId, {
-      name: editingName.trim(),
-      icon: editingIcon,
-      schema_definition: editingFields,
-    });
-    setIsSaving(false);
-
-    if (res.error) {
-      if (toast) toast.showToast(res.error, "error");
-    } else {
-      if (toast) toast.showToast("Schema field definitions updated successfully!", "success");
-      onRefresh();
-      collectionsState.refreshCollections();
-    }
-  };
-
-  const handleDeleteCollection = async (e: React.MouseEvent, id: string, name: string) => {
-    e.stopPropagation();
-    if (!confirm(`Are you sure you want to delete collection '${name}'?`)) return;
-
-    await deleteCollectionSchemaApi(id);
-    if (toast) toast.showToast(`Collection schema '${name}' deleted`, "info");
-    onRefresh();
-    collectionsState.refreshCollections();
-  };
-
   return (
     <div className="space-y-6">
-      {/* Top Action Bar Container with Search and Create Button */}
-      <div className="glass-panel rounded-2xl p-4 border border-slate-200/50 dark:border-slate-800/50 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
-        {/* Search Input Bar */}
-        <div className="relative flex-1 max-w-md w-full">
+      {/* Search & Actions Bar */}
+      <div className="glass-panel rounded-3xl p-4 sm:p-6 border border-slate-200/50 dark:border-slate-800/50 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="relative w-full sm:w-80">
           <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search collections..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+            placeholder="Filter collections by name or slug..."
+            className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
 
-        {/* Create Collection Button */}
-        <button
-          onClick={() => setIsBuilderOpen(true)}
-          className="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition transform active:scale-95 flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto"
-        >
-          <i className="fa-solid fa-plus text-xs"></i>
-          <span>Create Collection</span>
-        </button>
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+          <button
+            onClick={() => setIsBuilderOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition flex items-center gap-2"
+          >
+            <i className="fa-solid fa-plus text-xs"></i>
+            <span>Create New Dynamic Collection</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Studio View: Sidebar + Schema Editor */}
@@ -215,53 +299,15 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
             </div>
           ) : filteredCollections.length > 0 ? (
             <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
-              {filteredCollections.map((col) => {
-                const isSelected = col.id === selectedId;
-                return (
-                  <div
-                    key={col.id}
-                    onClick={() => handleSelectCollection(col)}
-                    className={`group cursor-pointer rounded-2xl p-4 transition-all duration-200 border flex items-center justify-between ${
-                      isSelected
-                        ? "bg-brand-500/10 border-brand-500/50 shadow-lg shadow-brand-500/10"
-                        : "glass-panel border-slate-200/50 dark:border-slate-800/50 hover:border-brand-500/30"
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1 pr-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`w-2 h-2 rounded-full ${
-                            isSelected ? "bg-brand-500 animate-pulse" : "bg-slate-300 dark:bg-slate-700"
-                          }`}
-                        ></span>
-                        <h4
-                          className={`text-xs font-bold truncate ${
-                            isSelected ? "text-brand-500" : "text-slate-900 dark:text-white"
-                          }`}
-                        >
-                          {col.name}
-                        </h4>
-                      </div>
-                      <p className="text-[11px] font-mono text-slate-400 dark:text-slate-500 mt-0.5 truncate pl-4">
-                        /{col.slug}
-                      </p>
-                      <div className="mt-2 pl-4 flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-600 dark:text-slate-400">
-                          {col.schema_definition?.length || 0} fields
-                        </span>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={(e) => handleDeleteCollection(e, col.id, col.name)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition opacity-0 group-hover:opacity-100"
-                      title="Delete Collection"
-                    >
-                      <i className="fa-solid fa-trash-can text-xs"></i>
-                    </button>
-                  </div>
-                );
-              })}
+              {filteredCollections.map((col) => (
+                <CollectionItemCard
+                  key={col.id}
+                  col={col}
+                  isSelected={col.id === selectedId}
+                  onSelect={handleSelectCollection}
+                  onDelete={handleDeleteCollection}
+                />
+              ))}
             </div>
           ) : (
             <div className="p-6 text-center rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
@@ -283,36 +329,37 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
               {/* Header Bar of Selected Collection */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/40 dark:border-slate-800/40">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full bg-brand-500/10 text-brand-500 text-[10px] font-bold uppercase tracking-wider">
-                      Selected Collection Schema
-                    </span>
-                    <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
-                      /{selectedCollection.slug}
-                    </span>
-                  </div>
-
-                  <div className="mt-1 flex items-center gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        onClick={() => setIsIconModalOpen(true)}
-                        className="w-9 h-9 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center cursor-pointer hover:bg-brand-500/20 transition group"
-                        title="Click to select icon"
-                      >
-                        <i className={`fa-solid ${editingIcon} text-lg text-brand-500 group-hover:scale-110 transition-transform`}></i>
-                      </div>
-                      <input
-                        type="text"
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-brand-500 focus:outline-none transition px-1 py-0.5"
-                      />
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      onClick={() => setIsIconModalOpen(true)}
+                      className="w-9 h-9 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center cursor-pointer hover:bg-brand-500/20 transition group"
+                      title="Click to select icon"
+                    >
+                      <i className={`fa-solid ${editingIcon} text-lg text-brand-500 group-hover:scale-110 transition-transform`}></i>
                     </div>
+                    <input
+                      type="text"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-brand-500 focus:outline-none transition px-1 py-0.5"
+                    />
                   </div>
                 </div>
 
                 {/* Right Header CTAs */}
                 <div className="flex flex-wrap items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingCollectionForModal(selectedCollection);
+                      setIsEditModalOpen(true);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition flex items-center gap-2 shadow-sm"
+                  >
+                    <i className="fa-solid fa-pen-to-square text-xs text-brand-500"></i>
+                    <span>Edit Collection</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setIsIconModalOpen(true)}
@@ -516,7 +563,7 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
         </div>
       </div>
 
-      {/* Schema Builder Modal */}
+      {/* Schema Builder Modal (Create Mode) */}
       <SchemaBuilderModal
         isOpen={isBuilderOpen}
         onClose={() => setIsBuilderOpen(false)}
@@ -524,6 +571,20 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
           onRefresh();
           collectionsState.refreshCollections();
         }}
+      />
+
+      {/* Schema Builder Modal (Edit Mode) */}
+      <SchemaBuilderModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setEditingCollectionForModal(null);
+        }}
+        onSuccess={() => {
+          onRefresh();
+          collectionsState.refreshCollections();
+        }}
+        initialData={editingCollectionForModal}
       />
 
       {/* Field Selection Popup Modal */}

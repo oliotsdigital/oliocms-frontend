@@ -190,7 +190,7 @@ export async function createCollectionSchemaApi(
 
 export async function updateCollectionSchemaApi(
   collectionId: string,
-  payload: { name?: string; icon?: string; schema_definition?: any[] }
+  payload: { name?: string; icon?: string; featured_image?: string; api_id_singular?: string; api_id_plural?: string; schema_definition?: any[] }
 ): Promise<{ collection?: CollectionSchema; error?: string }> {
   logger.info(`Updating collection schema ID: ${collectionId}...`, payload);
   try {

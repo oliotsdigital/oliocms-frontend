@@ -1,13 +1,12 @@
-"use client";
-
-import React, { useState } from "react";
-import { FieldDefinition, FieldType } from "@/models/collection.model";
-import { createCollectionSchemaApi } from "@/api/collection.api";
+import React, { useEffect, useState } from "react";
+import { CollectionSchema, FieldDefinition } from "@/models/collection.model";
+import { createCollectionSchemaApi, updateCollectionSchemaApi } from "@/api/collection.api";
 
 interface SchemaBuilderModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  initialData?: CollectionSchema | null;
 }
 
 export const AVAILABLE_ICONS = [
@@ -33,81 +32,50 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  initialData,
 }) => {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [apiIdSingular, setApiIdSingular] = useState("");
+  const [apiIdPlural, setApiIdPlural] = useState("");
   const [icon, setIcon] = useState("fa-cube");
-  const [fields, setFields] = useState<FieldDefinition[]>([
-    {
-      name: "title",
-      label: "Title",
-      type: "string",
-      validation: { required: true, unique: false },
-    },
-  ]);
+  const [featuredImage, setFeaturedImage] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showJsonPreview, setShowJsonPreview] = useState(false);
+
+  useEffect(() => {
+    if (initialData) {
+      setName(initialData.name || "");
+      setSlug(initialData.slug || "");
+      setApiIdSingular(initialData.api_id_singular || "");
+      setApiIdPlural(initialData.api_id_plural || "");
+      setIcon(initialData.icon || "fa-cube");
+      setFeaturedImage(initialData.featured_image || "");
+    } else {
+      setName("");
+      setSlug("");
+      setApiIdSingular("");
+      setApiIdPlural("");
+      setIcon("fa-cube");
+      setFeaturedImage("");
+    }
+    setError(null);
+  }, [initialData, isOpen]);
 
   if (!isOpen) return null;
 
   const handleNameChange = (val: string) => {
     setName(val);
-    const autoSlug = val
+    const cleaned = val
       .toLowerCase()
       .trim()
       .replace(/[^\w\s-]/g, "")
       .replace(/[\s_-]+/g, "-");
-    setSlug(autoSlug);
-  };
+    setSlug(cleaned);
 
-  const handleAddField = () => {
-    const newFieldName = `field_${fields.length + 1}`;
-    setFields([
-      ...fields,
-      {
-        name: newFieldName,
-        label: `Field ${fields.length + 1}`,
-        type: "string",
-        validation: { required: false, unique: false },
-      },
-    ]);
-  };
-
-  const handleRemoveField = (index: number) => {
-    if (fields.length <= 1) {
-      setError("A collection schema must contain at least one field definition.");
-      return;
-    }
-    setError(null);
-    setFields(fields.filter((_, idx) => idx !== index));
-  };
-
-  const handleFieldChange = (
-    index: number,
-    key: keyof FieldDefinition,
-    value: any
-  ) => {
-    const updated = [...fields];
-    if (key === "name") {
-      updated[index].name = value.toLowerCase().replace(/[^a-z0-9_]/g, "");
-    } else {
-      (updated[index] as any)[key] = value;
-    }
-    setFields(updated);
-  };
-
-  const handleValidationToggle = (
-    index: number,
-    valKey: "required" | "unique"
-  ) => {
-    const updated = [...fields];
-    const currentVal = updated[index].validation || {};
-    updated[index].validation = {
-      ...currentVal,
-      [valKey]: !currentVal[valKey],
-    };
-    setFields(updated);
+    const singular = cleaned.replace(/-+/g, "_");
+    setApiIdSingular(singular);
+    setApiIdPlural(singular ? (singular.endsWith("s") ? singular : `${singular}s`) : "");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -115,25 +83,39 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
     setError(null);
 
     if (!name.trim()) {
-      setError("Collection name is required.");
-      return;
-    }
-
-    // Validate duplicate field names
-    const names = fields.map((f) => f.name.trim().toLowerCase());
-    const hasDupes = names.some((n, idx) => names.indexOf(n) !== idx);
-    if (hasDupes) {
-      setError("Duplicate field keys detected in schema definition.");
+      setError("Collection Display Name is required.");
       return;
     }
 
     setLoading(true);
-    const res = await createCollectionSchemaApi({
-      name: name.trim(),
-      slug: slug.trim() || undefined,
-      icon,
-      schema_definition: fields,
-    });
+    let res;
+    if (initialData) {
+      res = await updateCollectionSchemaApi(initialData.id, {
+        name: name.trim(),
+        icon,
+        featured_image: featuredImage.trim() || undefined,
+        api_id_singular: apiIdSingular.trim() || undefined,
+        api_id_plural: apiIdPlural.trim() || undefined,
+      });
+    } else {
+      const defaultFields: FieldDefinition[] = [
+        {
+          name: "title",
+          label: "Title",
+          type: "string",
+          validation: { required: true, unique: false },
+        },
+      ];
+      res = await createCollectionSchemaApi({
+        name: name.trim(),
+        slug: slug.trim() || undefined,
+        icon,
+        featured_image: featuredImage.trim() || undefined,
+        api_id_singular: apiIdSingular.trim() || undefined,
+        api_id_plural: apiIdPlural.trim() || undefined,
+        schema_definition: defaultFields,
+      });
+    }
     setLoading(false);
 
     if (res.error) {
@@ -146,16 +128,16 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[120] bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-      <div className="relative w-full max-w-3xl glass-panel rounded-2xl p-6 shadow-2xl border border-slate-200/50 dark:border-slate-800/50 max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-2xl glass-panel rounded-2xl p-6 shadow-2xl border border-slate-200/50 dark:border-slate-800/50 max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-200/40 dark:border-slate-800/40">
           <div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <i className="fa-solid fa-layer-group text-brand-500"></i>
-              Create New Dynamic Collection
+              {initialData ? "Edit Collection Settings" : "Create New Dynamic Collection"}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Define metadata schema without dynamic SQL table creation (JSONB Document pattern)
+              Define collection metadata, API UIDs, featured image, and sidebar icon
             </p>
           </div>
           <button
@@ -175,18 +157,18 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="mt-4 space-y-5 flex-1 overflow-y-auto pr-1">
-          {/* Collection Name & Slug */}
+          {/* Display Name & URL Slug */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Collection Name *
+                Display Name *
               </label>
               <input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="e.g. Products, Articles, Invoices"
+                placeholder="e.g. Product, Article, Restaurant"
                 className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
@@ -204,122 +186,123 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
             </div>
           </div>
 
-          {/* Field Builder */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                Schema Field Definitions ({fields.length})
+          {/* API ID (Singular) & API ID (Plural) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                API ID (Singular)
               </label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowJsonPreview(!showJsonPreview)}
-                  className="text-[11px] text-slate-500 hover:text-brand-500 font-semibold underline"
-                >
-                  {showJsonPreview ? "Hide JSON Schema" : "View JSON Schema"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAddField}
-                  className="px-2.5 py-1 rounded-lg bg-brand-500/10 hover:bg-brand-500 text-brand-500 hover:text-white text-xs font-bold transition flex items-center gap-1.5"
-                >
-                  <i className="fa-solid fa-plus text-[10px]"></i> Add Property
-                </button>
-              </div>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-1.5 leading-snug">
+                The UID is used to generate the API routes and databases tables/collections
+              </p>
+              <input
+                type="text"
+                value={apiIdSingular}
+                onChange={(e) => setApiIdSingular(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                placeholder="e.g. product"
+                className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
             </div>
 
-            {showJsonPreview && (
-              <div className="mb-4 p-3 rounded-xl bg-slate-900 text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-40 border border-slate-800">
-                <pre>{JSON.stringify(fields, null, 2)}</pre>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                API ID (Plural)
+              </label>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-1.5 leading-snug">
+                Plural identifier for endpoints & collection arrays
+              </p>
+              <input
+                type="text"
+                value={apiIdPlural}
+                onChange={(e) => setApiIdPlural(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                placeholder="e.g. products"
+                className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+          </div>
+
+          {/* Featured Image Option (Optional) */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Featured Image <span className="text-[10px] font-normal text-slate-400">(Optional)</span>
+            </label>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={featuredImage}
+                  onChange={(e) => setFeaturedImage(e.target.value)}
+                  placeholder="Paste image URL (e.g. https://images.unsplash.com/...)"
+                  className="flex-1 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                <label className="px-3.5 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer transition flex items-center gap-1.5 shrink-0">
+                  <i className="fa-solid fa-cloud-arrow-up text-xs"></i>
+                  <span>Upload Image</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          if (ev.target?.result) {
+                            setFeaturedImage(ev.target.result as string);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </label>
               </div>
-            )}
 
-            <div className="space-y-3">
-              {fields.map((field, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center gap-3"
-                >
-                  {/* Field Name */}
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">
-                      Key (snake_case)
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={field.name}
-                      onChange={(e) => handleFieldChange(idx, "name", e.target.value)}
-                      placeholder="field_name"
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
-                    />
-                  </div>
-
-                  {/* Field Label */}
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">
-                      Display Label
-                    </label>
-                    <input
-                      type="text"
-                      value={field.label || ""}
-                      onChange={(e) => handleFieldChange(idx, "label", e.target.value)}
-                      placeholder="Display Label"
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
-                    />
-                  </div>
-
-                  {/* Field Type */}
-                  <div className="w-full md:w-36">
-                    <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">
-                      Property Type
-                    </label>
-                    <select
-                      value={field.type}
-                      onChange={(e) => handleFieldChange(idx, "type", e.target.value as FieldType)}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+              {featuredImage && (
+                <div className="relative w-full max-w-sm h-32 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 group shadow-md">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={featuredImage}
+                    alt="Featured Image Preview"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=300";
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setFeaturedImage("")}
+                      className="px-3 py-1 rounded-lg bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 transition shadow-md flex items-center gap-1.5"
                     >
-                      <option value="string">Text (String)</option>
-                      <option value="number">Number</option>
-                      <option value="boolean">Boolean (Switch)</option>
-                      <option value="relation">Relation ID</option>
-                    </select>
-                  </div>
-
-                  {/* Validation Toggles */}
-                  <div className="flex items-center gap-3 pt-2 md:pt-4">
-                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-medium text-slate-700 dark:text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={!!field.validation?.required}
-                        onChange={() => handleValidationToggle(idx, "required")}
-                        className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
-                      />
-                      Required
-                    </label>
-
-                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-medium text-slate-700 dark:text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={!!field.validation?.unique}
-                        onChange={() => handleValidationToggle(idx, "unique")}
-                        className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
-                      />
-                      Unique
-                    </label>
-
-                    {fields.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveField(idx)}
-                        className="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-500/10 transition ml-auto md:ml-0"
-                        title="Remove Field"
-                      >
-                        <i className="fa-solid fa-trash-can text-xs"></i>
-                      </button>
-                    )}
+                      <i className="fa-solid fa-trash-can"></i> Remove Image
+                    </button>
                   </div>
                 </div>
+              )}
+            </div>
+          </div>
+
+          {/* Collection Sidebar Icon Selector */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              Collection Sidebar Icon
+            </label>
+            <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+              {AVAILABLE_ICONS.map((ic) => (
+                <button
+                  key={ic.class}
+                  type="button"
+                  onClick={() => setIcon(ic.class)}
+                  title={ic.label}
+                  className={`p-2.5 rounded-xl border text-center transition flex items-center justify-center ${
+                    icon === ic.class
+                      ? "bg-brand-500/15 border-brand-500 text-brand-500 ring-2 ring-brand-500/30 font-bold"
+                      : "bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600"
+                  }`}
+                >
+                  <i className={`fa-solid ${ic.class} text-base`}></i>
+                </button>
               ))}
             </div>
           </div>

@@ -38,6 +38,9 @@ export interface CollectionSchema {
   name: string;
   slug: string;
   icon?: string;
+  featured_image?: string;
+  api_id_singular?: string;
+  api_id_plural?: string;
   schema_definition: FieldDefinition[];
   is_deleted?: boolean;
   created_at: string;
@@ -59,6 +62,9 @@ export interface CreateCollectionPayload {
   name: string;
   slug?: string;
   icon?: string;
+  featured_image?: string;
+  api_id_singular?: string;
+  api_id_plural?: string;
   schema_definition: FieldDefinition[];
 }
 

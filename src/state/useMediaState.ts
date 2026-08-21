@@ -17,7 +17,18 @@ export function useMediaState(
   });
 
   useEffect(() => {
-    fetchMediaApi(selectedProjectId).then((data) => setMediaList(data));
+    if (!selectedProjectId) {
+      setMediaList([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchMediaApi(selectedProjectId).then((data) => {
+      if (!cancelled) setMediaList(data);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedProjectId]);
 
   const updateNewMediaForm = (fields: Partial<NewMediaForm>) => {

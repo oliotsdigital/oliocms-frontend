@@ -9,6 +9,11 @@ export function useCollectionState(selectedProjectId?: string) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const refreshCollections = useCallback(async () => {
+    if (!selectedProjectId) {
+      setCollections([]);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     const data = await fetchCollectionsApi(selectedProjectId);
     setCollections(data);
@@ -16,8 +21,27 @@ export function useCollectionState(selectedProjectId?: string) {
   }, [selectedProjectId]);
 
   useEffect(() => {
-    refreshCollections();
-  }, [refreshCollections]);
+    if (!selectedProjectId) {
+      setCollections([]);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const load = async () => {
+      setIsLoading(true);
+      const data = await fetchCollectionsApi(selectedProjectId);
+      if (cancelled) return;
+      setCollections(data);
+      setIsLoading(false);
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId]);
 
   return {
     collections,

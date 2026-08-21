@@ -12,7 +12,8 @@ import { logger } from "@/utils/logger";
 
 export function useProjectState(
   showToast?: (msg: string, type?: "success" | "error" | "info") => void,
-  isLoggedIn?: boolean
+  isLoggedIn?: boolean,
+  isInitializing?: boolean
 ) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -48,17 +49,53 @@ export function useProjectState(
   };
 
   useEffect(() => {
-    const token = typeof window !== "undefined"
-      ? (localStorage.getItem("supabase_access_token") || sessionStorage.getItem("supabase_access_token"))
-      : null;
-    const tenantId = typeof window !== "undefined"
-      ? (localStorage.getItem("tenant_id") || sessionStorage.getItem("tenant_id"))
-      : null;
+    if (isInitializing) return;
 
-    if (isLoggedIn || (token && tenantId)) {
-      refreshProjects();
+    if (!isLoggedIn) {
+      setProjects([]);
+      setSelectedProject(null);
+      setHasFetched(false);
+      setFetchSuccess(false);
+      setIsLoading(false);
+      return;
     }
-  }, [isLoggedIn]);
+
+    let cancelled = false;
+
+    const load = async () => {
+      setIsLoading(true);
+      const { projects: data, success } = await fetchProjectsApi();
+      if (cancelled) return;
+
+      setHasFetched(true);
+      setFetchSuccess(success);
+
+      if (success) {
+        setProjects(data);
+        if (data && data.length > 0) {
+          const savedId = typeof window !== "undefined"
+            ? (localStorage.getItem("selected_project_id") || sessionStorage.getItem("selected_project_id"))
+            : null;
+          const matched = data.find((p) => p.id === savedId) || data[0];
+          setSelectedProject(matched);
+          if (typeof window !== "undefined" && matched) {
+            localStorage.setItem("selected_project_id", matched.id);
+            sessionStorage.setItem("selected_project_id", matched.id);
+          }
+          logger.info(`Active project loaded: "${matched.name}" (id: ${matched.id})`);
+        } else {
+          setSelectedProject(null);
+          logger.info("No projects found in database.");
+        }
+      }
+      setIsLoading(false);
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, isInitializing]);
 
   const isFirstTimeUser = hasFetched && fetchSuccess && projects.length === 0;
 

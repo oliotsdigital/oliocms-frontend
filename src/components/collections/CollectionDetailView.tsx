@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { CollectionRecord, CollectionSchema } from "@/models/collection.model";
@@ -26,25 +26,30 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  const loadData = async () => {
+  const loadData = useCallback(async (signal?: { cancelled: boolean }) => {
+    if (!collectionId) return;
     setLoading(true);
     const schemaData = await fetchCollectionSchemaApi(collectionId);
+    if (signal?.cancelled) return;
     setSchema(schemaData);
 
     if (schemaData) {
       const filterParams = { ...activeFilters };
       if (search.trim()) filterParams["search"] = search.trim();
       const recordsData = await fetchCollectionRecordsApi(collectionId, filterParams);
+      if (signal?.cancelled) return;
       setRecords(recordsData);
     }
     setLoading(false);
-  };
+  }, [collectionId, search, activeFilters]);
 
   useEffect(() => {
-    if (collectionId) {
-      loadData();
-    }
-  }, [collectionId, search, activeFilters]);
+    const signal = { cancelled: false };
+    loadData(signal);
+    return () => {
+      signal.cancelled = true;
+    };
+  }, [loadData]);
 
   const handleExportData = () => {
     if (!schema || records.length === 0) {
@@ -173,7 +178,7 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
               </Link>
 
               <button
-                onClick={loadData}
+                onClick={() => loadData()}
                 className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-brand-500 transition text-xs font-bold flex items-center gap-1.5"
                 title="Refresh Records"
               >
@@ -198,7 +203,7 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
             <DynamicDataTable
               schema={schema}
               records={records}
-              onRefresh={loadData}
+              onRefresh={() => loadData()}
               onFilterChange={(filters) => setActiveFilters(filters)}
             />
 
@@ -207,7 +212,7 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
               isOpen={isAddModalOpen}
               onClose={() => setIsAddModalOpen(false)}
               schema={schema}
-              onSuccess={loadData}
+              onSuccess={() => loadData()}
             />
           </div>
         ) : (

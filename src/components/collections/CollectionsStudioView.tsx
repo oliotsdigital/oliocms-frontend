@@ -10,13 +10,6 @@ import { AddFieldModal } from "./AddFieldModal";
 import { SelectIconModal } from "./SelectIconModal";
 import { useOlio } from "@/state/OlioProvider";
 
-interface CollectionsStudioViewProps {
-  collections: CollectionSchema[];
-  loading: boolean;
-  onRefresh: () => void;
-  selectedProjectId?: string;
-}
-
 interface CollectionItemCardProps {
   col: CollectionSchema;
   isSelected: boolean;
@@ -92,14 +85,13 @@ const CollectionItemCard: React.FC<CollectionItemCardProps> = ({
   );
 };
 
-export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
-  collections,
-  loading,
-  onRefresh,
-}) => {
+export const CollectionsStudioView: React.FC = () => {
   const searchParams = useSearchParams();
   const urlId = searchParams.get("id");
   const { toast, collectionsState } = useOlio();
+  const collections = collectionsState.collections;
+  const loading = collectionsState.isLoading;
+  const onRefresh = collectionsState.refreshCollections;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
@@ -165,7 +157,6 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
     } else {
       if (toast) toast.showToast(`Collection "${name}" deleted successfully`, "success");
       onRefresh();
-      collectionsState.refreshCollections();
     }
   };
 
@@ -198,7 +189,6 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
     } else {
       if (toast) toast.showToast("Schema field definitions updated successfully!", "success");
       onRefresh();
-      collectionsState.refreshCollections();
     }
   };
 
@@ -576,10 +566,7 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
       <SchemaBuilderModal
         isOpen={isBuilderOpen}
         onClose={() => setIsBuilderOpen(false)}
-        onSuccess={() => {
-          onRefresh();
-          collectionsState.refreshCollections();
-        }}
+        onSuccess={onRefresh}
       />
 
       {/* Schema Builder Modal (Edit Mode) */}
@@ -589,10 +576,7 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
           setIsEditModalOpen(false);
           setEditingCollectionForModal(null);
         }}
-        onSuccess={() => {
-          onRefresh();
-          collectionsState.refreshCollections();
-        }}
+        onSuccess={onRefresh}
         initialData={editingCollectionForModal}
       />
 

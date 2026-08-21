@@ -36,7 +36,18 @@ export function useProductState(
   });
 
   useEffect(() => {
-    fetchProductsApi(selectedProjectId).then((data) => setProductsList(data));
+    if (!selectedProjectId) {
+      setProductsList([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchProductsApi(selectedProjectId).then((data) => {
+      if (!cancelled) setProductsList(data);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedProjectId]);
 
   const updateNewProductForm = (fields: Partial<NewProductForm>) => {

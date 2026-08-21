@@ -29,15 +29,22 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
   } = useForm<Record<string, any>>();
 
   useEffect(() => {
+    if (!collectionId) return;
+
+    let cancelled = false;
+
     async function loadSchema() {
       setLoadingSchema(true);
       const data = await fetchCollectionSchemaApi(collectionId);
+      if (cancelled) return;
       setSchema(data);
       setLoadingSchema(false);
     }
-    if (collectionId) {
-      loadSchema();
-    }
+
+    loadSchema();
+    return () => {
+      cancelled = true;
+    };
   }, [collectionId]);
 
   const onSubmit = async (formData: Record<string, any>) => {

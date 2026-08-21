@@ -1,6 +1,6 @@
 import { Project, NewProjectForm } from "@/models/project.model";
 import { APP_CONFIG } from "@/config/app.config";
-import { getAuthHeaders } from "./auth.api";
+import { apiFetch, getAuthHeaders } from "./client";
 import { logger } from "@/utils/logger";
 
 const API_BASE_URL = APP_CONFIG.apiBaseUrl;
@@ -10,7 +10,7 @@ export const DEFAULT_PROJECTS: Project[] = [];
 export async function fetchProjectsApi(): Promise<{ projects: Project[]; success: boolean }> {
   logger.info("Fetching projects list from API...");
   try {
-    const res = await fetch(`${API_BASE_URL}/projects?limit=100`, {
+    const res = await apiFetch(`${API_BASE_URL}/projects?limit=100`, {
       headers: getAuthHeaders(),
     });
     if (res.ok) {
@@ -56,7 +56,7 @@ export async function checkDomainAvailabilityApi(
     if (defaultDomain) params.append("default_domain", defaultDomain);
     if (customDomain) params.append("domain", customDomain);
 
-    const res = await fetch(`${API_BASE_URL}/projects/check-domain?${params.toString()}`, {
+    const res = await apiFetch(`${API_BASE_URL}/projects/check-domain?${params.toString()}`, {
       headers: getAuthHeaders(),
     });
     if (res.ok) {
@@ -77,7 +77,7 @@ export async function createProjectApi(
 ): Promise<{ project: Project; error?: string }> {
   logger.info(`Creating new project: "${form.name}"`, { form });
   try {
-    const res = await fetch(`${API_BASE_URL}/projects`, {
+    const res = await apiFetch(`${API_BASE_URL}/projects`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -141,7 +141,7 @@ export async function updateProjectApi(
 ): Promise<{ project?: Project; error?: string }> {
   logger.info(`Updating project ${id}`, data);
   try {
-    const res = await fetch(`${API_BASE_URL}/projects/${id}`, {
+    const res = await apiFetch(`${API_BASE_URL}/projects/${id}`, {
       method: "PUT",
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -181,7 +181,7 @@ export async function updateProjectApi(
 export async function deleteProjectApi(id: string): Promise<{ success: boolean; error?: string }> {
   logger.info(`Deleting project ${id}...`);
   try {
-    const res = await fetch(`${API_BASE_URL}/projects/${id}`, {
+    const res = await apiFetch(`${API_BASE_URL}/projects/${id}`, {
       method: "DELETE",
       headers: getAuthHeaders(),
     });

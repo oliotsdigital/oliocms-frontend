@@ -20,7 +20,11 @@ export default function RegisterPage() {
     e.preventDefault();
     const success = await auth.handleRegister();
     if (success) {
-      router.push("/dashboard");
+      if (auth.isLoggedIn) {
+        router.push("/dashboard");
+      } else {
+        router.push("/login");
+      }
     }
   };
 

@@ -64,10 +64,19 @@ export function useAuthStore(showToast?: (msg: string, type?: "success" | "info"
     setIsLoading(true);
     try {
       const res = await registerApi(authForm);
-      if (res.success && res.user) {
-        setIsLoggedIn(true);
-        setUser(res.user);
-        if (showToast) showToast(res.message || "Account registered successfully!", "success");
+      if (res.success) {
+        if (res.user) {
+          setIsLoggedIn(true);
+          setUser(res.user);
+          if (showToast) showToast(res.message || "Account registered successfully!", "success");
+        } else {
+          setIsLoggedIn(false);
+          setUser(null);
+          if (showToast) showToast(
+            res.message || "Registration successful! Please check your email inbox to confirm your account before logging in.",
+            "success"
+          );
+        }
         return true;
       } else {
         if (showToast) showToast(res.message || "Registration failed", "error");

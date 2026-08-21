@@ -133,11 +133,9 @@ export async function registerApi(form: AuthForm): Promise<AuthResponse> {
     const sessionData = data.session;
     const tenantId = data.user?.tenant_id || sessionData?.tenant_id || sessionData?.user?.tenant_id;
 
-    if (typeof window !== "undefined") {
-      if (sessionData?.access_token) {
-        localStorage.setItem("supabase_access_token", sessionData.access_token);
-        sessionStorage.setItem("supabase_access_token", sessionData.access_token);
-      }
+    if (typeof window !== "undefined" && sessionData?.access_token) {
+      localStorage.setItem("supabase_access_token", sessionData.access_token);
+      sessionStorage.setItem("supabase_access_token", sessionData.access_token);
       if (sessionData?.refresh_token) {
         localStorage.setItem("supabase_refresh_token", sessionData.refresh_token);
         sessionStorage.setItem("supabase_refresh_token", sessionData.refresh_token);
@@ -162,8 +160,8 @@ export async function registerApi(form: AuthForm): Promise<AuthResponse> {
 
     return {
       success: true,
-      user,
-      message: data.message || "Account registered successfully!",
+      user: sessionData?.access_token ? user : undefined,
+      message: data.message || "Registration successful! Please check your email to confirm your account.",
     };
   } catch (error: any) {
     logger.error("Network error during registration request:", error);

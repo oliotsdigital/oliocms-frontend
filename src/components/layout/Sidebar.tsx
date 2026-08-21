@@ -131,6 +131,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isFirstWebsite
           </span>
         </Link>
 
+        {/* Section: Web Content */}
+        <div className="pt-2 pb-1 px-3">
+          <p
+            className={`text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 transition-opacity duration-200 ${
+              sidebarExpanded ? "opacity-100" : "opacity-0 h-0 overflow-hidden"
+            }`}
+          >
+            Web Content
+          </p>
+          {!sidebarExpanded && <div className="w-full h-px bg-slate-200/60 dark:bg-slate-800/60 my-1" />}
+        </div>
+
         {/* Dynamic Collections */}
         <Link
           href="/collections"
@@ -149,6 +161,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isFirstWebsite
             Collections
           </span>
         </Link>
+
 
         {/* Products (With Submenu on Hover) */}
         <div className="relative">

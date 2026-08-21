@@ -35,29 +35,46 @@ export function OlioProvider({ children }: { children: React.ReactNode }) {
   const checklist = useChecklistState();
 
   const auth = useAuthStore(toast.showToast);
-  const projectState = useProjectState(toast.showToast);
+  const projectState = useProjectState(toast.showToast, auth.isLoggedIn);
+  const activeProjectId = projectState.selectedProject?.id;
 
   const profile = useProfileState(toast.showToast, () => {
     checklist.markCompleted("profile");
   });
 
-  const categories = useCategoryState(toast.showToast, () => {
-    checklist.markCompleted("categories");
-  });
+  const categories = useCategoryState(
+    toast.showToast,
+    () => {
+      checklist.markCompleted("categories");
+    },
+    activeProjectId
+  );
 
-  const brands = useBrandState(toast.showToast, () => {
-    checklist.markCompleted("brands");
-  });
+  const brands = useBrandState(
+    toast.showToast,
+    () => {
+      checklist.markCompleted("brands");
+    },
+    activeProjectId
+  );
 
-  const tags = useTagState(toast.showToast, () => {
-    checklist.markCompleted("tags");
-  });
+  const tags = useTagState(
+    toast.showToast,
+    () => {
+      checklist.markCompleted("tags");
+    },
+    activeProjectId
+  );
 
-  const products = useProductState(toast.showToast, () => {
-    checklist.markCompleted("firstProduct");
-  });
+  const products = useProductState(
+    toast.showToast,
+    () => {
+      checklist.markCompleted("firstProduct");
+    },
+    activeProjectId
+  );
 
-  const media = useMediaState(toast.showToast);
+  const media = useMediaState(toast.showToast, activeProjectId);
 
   return (
     <OlioContext.Provider

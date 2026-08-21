@@ -4,7 +4,10 @@ import { useState, useEffect, useMemo } from "react";
 import { MediaItem, NewMediaForm } from "@/models/media.model";
 import { fetchMediaApi, uploadMediaApi, deleteMediaApi } from "@/api/media.api";
 
-export function useMediaState(showToast?: (msg: string, type?: "success" | "info" | "error") => void) {
+export function useMediaState(
+  showToast?: (msg: string, type?: "success" | "info" | "error") => void,
+  selectedProjectId?: string
+) {
   const [mediaList, setMediaList] = useState<MediaItem[]>([]);
   const [mediaSearch, setMediaSearch] = useState<string>("");
   const [showMediaModal, setShowMediaModal] = useState<boolean>(false);
@@ -14,8 +17,8 @@ export function useMediaState(showToast?: (msg: string, type?: "success" | "info
   });
 
   useEffect(() => {
-    fetchMediaApi().then((data) => setMediaList(data));
-  }, []);
+    fetchMediaApi(selectedProjectId).then((data) => setMediaList(data));
+  }, [selectedProjectId]);
 
   const updateNewMediaForm = (fields: Partial<NewMediaForm>) => {
     setNewMedia((prev) => ({ ...prev, ...fields }));

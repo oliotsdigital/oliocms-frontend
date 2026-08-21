@@ -5,8 +5,8 @@ const INITIAL_TAGS: Tag[] = [
   { id: 2, name: "Winter Sale", slug: "winter-sale", thumb: "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&q=80&w=100" },
 ];
 
-export async function fetchTagsApi(): Promise<Tag[]> {
-  await new Promise((res) => setTimeout(res, 200));
+export async function fetchTagsApi(projectId?: string): Promise<Tag[]> {
+  await new Promise((res) => setTimeout(res, 100));
   return [...INITIAL_TAGS];
 }
 

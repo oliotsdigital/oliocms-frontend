@@ -45,8 +45,8 @@ const INITIAL_PRODUCTS: Product[] = [
   },
 ];
 
-export async function fetchProductsApi(): Promise<Product[]> {
-  await new Promise((res) => setTimeout(res, 200));
+export async function fetchProductsApi(projectId?: string): Promise<Product[]> {
+  await new Promise((res) => setTimeout(res, 100));
   return [...INITIAL_PRODUCTS];
 }
 

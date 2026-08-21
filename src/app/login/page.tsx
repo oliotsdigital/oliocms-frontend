@@ -11,10 +11,11 @@ export default function LoginPage() {
   const { auth, theme, toast } = useOlio();
 
   useEffect(() => {
-    if (auth.isLoggedIn) {
+    if (!auth.isInitializing && auth.isLoggedIn) {
       router.push("/dashboard");
     }
-  }, [auth.isLoggedIn, router]);
+  }, [auth.isInitializing, auth.isLoggedIn, router]);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

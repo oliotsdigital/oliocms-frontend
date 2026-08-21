@@ -88,10 +88,19 @@ const MOCK_RECORDS: Record<string, CollectionRecord[]> = {
   ],
 };
 
-export async function fetchCollectionsApi(): Promise<CollectionSchema[]> {
-  logger.info("Fetching collection schemas...");
+export async function fetchCollectionsApi(projectId?: string): Promise<CollectionSchema[]> {
+  const selectedProjId =
+    projectId ||
+    (typeof window !== "undefined"
+      ? localStorage.getItem("selected_project_id") || sessionStorage.getItem("selected_project_id")
+      : null);
+
+  logger.info(`Fetching collection schemas for project ${selectedProjId || "all"}...`);
   try {
-    const res = await fetch(`${API_BASE_URL}/collections`, {
+    const url = selectedProjId
+      ? `${API_BASE_URL}/collections?project_id=${selectedProjId}`
+      : `${API_BASE_URL}/collections`;
+    const res = await fetch(url, {
       headers: getAuthHeaders(),
     });
     if (res.ok) {
@@ -104,6 +113,12 @@ export async function fetchCollectionsApi(): Promise<CollectionSchema[]> {
     }
   } catch (err) {
     logger.warn("Using offline fallback collections due to network issue:", err);
+  }
+
+  if (selectedProjId) {
+    return MOCK_COLLECTIONS.filter(
+      (c) => !c.project_id || c.project_id === selectedProjId || c.project_id === "proj_default"
+    );
   }
   return MOCK_COLLECTIONS;
 }
@@ -129,12 +144,21 @@ export async function fetchCollectionSchemaApi(
 export async function createCollectionSchemaApi(
   payload: CreateCollectionPayload
 ): Promise<{ collection?: CollectionSchema; error?: string }> {
-  logger.info("Creating collection schema...", payload);
+  const selectedProjId =
+    typeof window !== "undefined"
+      ? localStorage.getItem("selected_project_id") || sessionStorage.getItem("selected_project_id")
+      : null;
+  const fullPayload = {
+    ...payload,
+    project_id: payload.project_id || selectedProjId || undefined,
+  };
+
+  logger.info("Creating collection schema...", fullPayload);
   try {
     const res = await fetch(`${API_BASE_URL}/collections`, {
       method: "POST",
       headers: getAuthHeaders(),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(fullPayload),
     });
     const data = await res.json();
     if (res.ok) {
@@ -152,6 +176,7 @@ export async function createCollectionSchemaApi(
     const newCol: CollectionSchema = {
       id: `col_${Date.now()}`,
       tenant_id: "ten_default",
+      project_id: fullPayload.project_id || "proj_default",
       name: payload.name,
       slug: payload.slug || payload.name.toLowerCase().replace(/\s+/g, "-"),
       schema_definition: payload.schema_definition,
@@ -162,6 +187,7 @@ export async function createCollectionSchemaApi(
     return { collection: newCol };
   }
 }
+
 
 export async function deleteCollectionSchemaApi(
   collectionId: string

@@ -9,8 +9,8 @@ const INITIAL_MEDIA: MediaItem[] = [
   { id: 6, name: "ceramic-cup.jpg", url: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=300", size: "920 KB", format: "jpg" },
 ];
 
-export async function fetchMediaApi(): Promise<MediaItem[]> {
-  await new Promise((res) => setTimeout(res, 200));
+export async function fetchMediaApi(projectId?: string): Promise<MediaItem[]> {
+  await new Promise((res) => setTimeout(res, 100));
   return [...INITIAL_MEDIA];
 }
 

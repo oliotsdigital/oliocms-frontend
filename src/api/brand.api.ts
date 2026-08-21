@@ -5,8 +5,8 @@ const INITIAL_BRANDS: Brand[] = [
   { id: 2, name: "Apex Gear", slug: "apex-gear", parent: "None", thumb: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=100" },
 ];
 
-export async function fetchBrandsApi(): Promise<Brand[]> {
-  await new Promise((res) => setTimeout(res, 200));
+export async function fetchBrandsApi(projectId?: string): Promise<Brand[]> {
+  await new Promise((res) => setTimeout(res, 100));
   return [...INITIAL_BRANDS];
 }
 

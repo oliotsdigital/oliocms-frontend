@@ -6,7 +6,8 @@ import { fetchBrandsApi, createBrandApi, deleteBrandApi } from "@/api/brand.api"
 
 export function useBrandState(
   showToast?: (msg: string, type?: "success" | "info" | "error") => void,
-  onBrandCreated?: () => void
+  onBrandCreated?: () => void,
+  selectedProjectId?: string
 ) {
   const [brandsList, setBrandsList] = useState<Brand[]>([]);
   const [newBrand, setNewBrand] = useState<NewBrandForm>({
@@ -18,8 +19,8 @@ export function useBrandState(
   });
 
   useEffect(() => {
-    fetchBrandsApi().then((data) => setBrandsList(data));
-  }, []);
+    fetchBrandsApi(selectedProjectId).then((data) => setBrandsList(data));
+  }, [selectedProjectId]);
 
   const updateNewBrandForm = (fields: Partial<NewBrandForm>) => {
     setNewBrand((prev) => ({ ...prev, ...fields }));

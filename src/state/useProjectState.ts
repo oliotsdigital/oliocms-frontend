@@ -10,36 +10,65 @@ import {
 } from "@/api/project.api";
 import { logger } from "@/utils/logger";
 
-export function useProjectState(showToast?: (msg: string, type?: "success" | "error" | "info") => void) {
+export function useProjectState(
+  showToast?: (msg: string, type?: "success" | "error" | "info") => void,
+  isLoggedIn?: boolean
+) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [hasFetched, setHasFetched] = useState<boolean>(false);
+  const [fetchSuccess, setFetchSuccess] = useState<boolean>(false);
 
   const refreshProjects = async () => {
     setIsLoading(true);
-    const data = await fetchProjectsApi();
-    setProjects(data);
-    if (data && data.length > 0) {
-      const savedId = typeof window !== "undefined" ? localStorage.getItem("selected_project_id") : null;
-      const matched = data.find((p) => p.id === savedId) || data[0];
-      setSelectedProject(matched);
-      logger.info(`Active project loaded: "${matched.name}" (id: ${matched.id})`);
-    } else {
-      setSelectedProject(null);
-      logger.info("No projects found in database.");
+    const { projects: data, success } = await fetchProjectsApi();
+    setHasFetched(true);
+    setFetchSuccess(success);
+
+    if (success) {
+      setProjects(data);
+      if (data && data.length > 0) {
+        const savedId = typeof window !== "undefined"
+          ? (localStorage.getItem("selected_project_id") || sessionStorage.getItem("selected_project_id"))
+          : null;
+        const matched = data.find((p) => p.id === savedId) || data[0];
+        setSelectedProject(matched);
+        if (typeof window !== "undefined" && matched) {
+          localStorage.setItem("selected_project_id", matched.id);
+          sessionStorage.setItem("selected_project_id", matched.id);
+        }
+        logger.info(`Active project loaded: "${matched.name}" (id: ${matched.id})`);
+      } else {
+        setSelectedProject(null);
+        logger.info("No projects found in database.");
+      }
     }
     setIsLoading(false);
   };
 
   useEffect(() => {
-    refreshProjects();
-  }, []);
+    const token = typeof window !== "undefined"
+      ? (localStorage.getItem("supabase_access_token") || sessionStorage.getItem("supabase_access_token"))
+      : null;
+    const tenantId = typeof window !== "undefined"
+      ? (localStorage.getItem("tenant_id") || sessionStorage.getItem("tenant_id"))
+      : null;
+
+    if (isLoggedIn || (token && tenantId)) {
+      refreshProjects();
+    }
+  }, [isLoggedIn]);
+
+  const isFirstTimeUser = hasFetched && fetchSuccess && projects.length === 0;
 
   const selectProject = (project: Project) => {
     logger.info(`User switched active project to: "${project.name}" (id: ${project.id})`);
     setSelectedProject(project);
+
     if (typeof window !== "undefined") {
       localStorage.setItem("selected_project_id", project.id);
+      sessionStorage.setItem("selected_project_id", project.id);
     }
     if (showToast) {
       showToast(`Switched project to: ${project.name}`, "info");
@@ -95,8 +124,14 @@ export function useProjectState(showToast?: (msg: string, type?: "success" | "er
         if (selectedProject?.id === id) {
           const nextSelected = remaining[0] || null;
           setSelectedProject(nextSelected);
-          if (nextSelected && typeof window !== "undefined") {
-            localStorage.setItem("selected_project_id", nextSelected.id);
+          if (typeof window !== "undefined") {
+            if (nextSelected) {
+              localStorage.setItem("selected_project_id", nextSelected.id);
+              sessionStorage.setItem("selected_project_id", nextSelected.id);
+            } else {
+              localStorage.removeItem("selected_project_id");
+              sessionStorage.removeItem("selected_project_id");
+            }
           }
         }
         return remaining;
@@ -118,5 +153,7 @@ export function useProjectState(showToast?: (msg: string, type?: "success" | "er
     deleteProject,
     refreshProjects,
     isLoading,
+    isFirstTimeUser,
   };
 }
+

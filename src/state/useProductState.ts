@@ -6,7 +6,8 @@ import { fetchProductsApi, createProductApi, updateProductApi, deleteProductApi 
 
 export function useProductState(
   showToast?: (msg: string, type?: "success" | "info" | "error") => void,
-  onProductCreated?: () => void
+  onProductCreated?: () => void,
+  selectedProjectId?: string
 ) {
   const [productsList, setProductsList] = useState<Product[]>([]);
   const [productSearch, setProductSearch] = useState<string>("");
@@ -35,8 +36,8 @@ export function useProductState(
   });
 
   useEffect(() => {
-    fetchProductsApi().then((data) => setProductsList(data));
-  }, []);
+    fetchProductsApi(selectedProjectId).then((data) => setProductsList(data));
+  }, [selectedProjectId]);
 
   const updateNewProductForm = (fields: Partial<NewProductForm>) => {
     setNewProduct((prev) => ({ ...prev, ...fields }));

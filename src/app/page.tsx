@@ -9,12 +9,14 @@ export default function Home() {
   const { auth } = useOlio();
 
   useEffect(() => {
+    if (auth.isInitializing) return;
     if (auth.isLoggedIn) {
       router.push("/dashboard");
     } else {
       router.push("/login");
     }
-  }, [auth.isLoggedIn, router]);
+  }, [auth.isInitializing, auth.isLoggedIn, router]);
+
 
   return (
     <div className="min-h-screen flex items-center justify-center">

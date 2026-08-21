@@ -11,6 +11,7 @@ const DEFAULT_AVATAR =
  * Returns standard headers required for all authenticated API endpoints:
  * - Authorization: Bearer <supabase_access_token>
  * - X-Tenant-Id: <tenant_id>
+ * - X-Project-Id: <selected_project_id>
  */
 export function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
@@ -29,9 +30,16 @@ export function getAuthHeaders(): Record<string, string> {
     if (tenantId) {
       headers["X-Tenant-Id"] = tenantId;
     }
+    const projectId =
+      localStorage.getItem("selected_project_id") ||
+      sessionStorage.getItem("selected_project_id");
+    if (projectId) {
+      headers["X-Project-Id"] = projectId;
+    }
   }
   return headers;
 }
+
 
 export async function loginApi(form: AuthForm): Promise<AuthResponse> {
   if (!form.email || !form.password) {

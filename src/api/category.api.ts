@@ -6,8 +6,8 @@ const INITIAL_CATEGORIES: Category[] = [
   { id: 3, name: "Apparel", slug: "apparel", parent: "None", thumb: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=100" },
 ];
 
-export async function fetchCategoriesApi(): Promise<Category[]> {
-  await new Promise((res) => setTimeout(res, 200));
+export async function fetchCategoriesApi(projectId?: string): Promise<Category[]> {
+  await new Promise((res) => setTimeout(res, 100));
   return [...INITIAL_CATEGORIES];
 }
 

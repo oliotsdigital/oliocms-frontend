@@ -3,11 +3,14 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { useOlio } from "@/state/OlioProvider";
 import { CollectionSchema } from "@/models/collection.model";
 import { fetchCollectionsApi, deleteCollectionSchemaApi } from "@/api/collection.api";
 import { SchemaBuilderModal } from "@/components/collections/SchemaBuilderModal";
 
 export default function CollectionsPage() {
+  const { projectState } = useOlio();
+  const selectedProject = projectState.selectedProject;
   const [collections, setCollections] = useState<CollectionSchema[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -15,14 +18,14 @@ export default function CollectionsPage() {
 
   const loadCollections = async () => {
     setLoading(true);
-    const data = await fetchCollectionsApi();
+    const data = await fetchCollectionsApi(selectedProject?.id);
     setCollections(data);
     setLoading(false);
   };
 
   useEffect(() => {
     loadCollections();
-  }, []);
+  }, [selectedProject?.id]);
 
   const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
     e.preventDefault();

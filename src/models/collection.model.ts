@@ -19,6 +19,7 @@ export interface FieldDefinition {
 export interface CollectionSchema {
   id: string;
   tenant_id: string;
+  project_id?: string;
   name: string;
   slug: string;
   schema_definition: FieldDefinition[];
@@ -30,6 +31,7 @@ export interface CollectionSchema {
 export interface CollectionRecord {
   id: string;
   tenant_id: string;
+  project_id?: string;
   collection_id: string;
   data: Record<string, any>;
   created_at: string;
@@ -37,10 +39,12 @@ export interface CollectionRecord {
 }
 
 export interface CreateCollectionPayload {
+  project_id?: string;
   name: string;
   slug?: string;
   schema_definition: FieldDefinition[];
 }
+
 
 export interface CreateRecordPayload {
   data: Record<string, any>;

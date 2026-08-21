@@ -55,12 +55,18 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             <button
               type="button"
               disabled={isFirstWebsiteModalOpen}
-              onClick={() => setProjectDropdownOpen(!projectDropdownOpen)}
+              onClick={() => {
+                const nextOpen = !projectDropdownOpen;
+                setProjectDropdownOpen(nextOpen);
+                if (nextOpen && projectState.projects.length === 0) {
+                  projectState.refreshProjects();
+                }
+              }}
               className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 transition text-left"
             >
               <div className="truncate min-w-0 pr-2">
                 <p className="text-xs font-bold text-slate-900 dark:text-white truncate leading-tight">
-                  {projectState.selectedProject?.name || "Select Website"}
+                  {projectState.selectedProject?.name || (projectState.isLoading ? "Loading..." : "Select Website")}
                 </p>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate leading-tight mt-0.5">
                   {projectState.selectedProject?.defaultDomain ||
@@ -142,6 +148,12 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             >
               <i className="fa-solid fa-images"></i> Media
             </Link>
+            {/* Web Content Section */}
+            <div className="pt-2 pb-1 px-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                Web Content
+              </p>
+            </div>
             <Link
               href="/collections"
               onClick={onClose}
@@ -153,6 +165,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             >
               <i className="fa-solid fa-database"></i> Collections
             </Link>
+
             <Link
               href="/products"
               onClick={onClose}

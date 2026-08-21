@@ -28,12 +28,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!auth.isLoggedIn) {
+    if (!auth.isInitializing && !auth.isLoggedIn) {
       router.push("/login");
     }
-  }, [auth.isLoggedIn, router]);
+  }, [auth.isInitializing, auth.isLoggedIn, router]);
 
-  if (!auth.isLoggedIn) {
+  if (auth.isInitializing || !auth.isLoggedIn) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-8 h-8 rounded-xl bg-brand-500 animate-spin"></div>
@@ -41,8 +41,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     );
   }
 
-  // If projects finish loading and user has 0 websites, force the First Website Modal
-  const showFirstWebsiteModal = !projectState.isLoading && projectState.projects.length === 0;
+
+  // Force First Website Modal ONLY if projects finish loading and user genuinely has 0 websites in the database
+  const showFirstWebsiteModal = !projectState.isLoading && projectState.isFirstTimeUser;
+
 
   return (
     <div className="relative z-10 min-h-screen flex flex-col md:flex-row">

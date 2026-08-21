@@ -6,7 +6,8 @@ import { fetchTagsApi, createTagApi, deleteTagApi } from "@/api/tag.api";
 
 export function useTagState(
   showToast?: (msg: string, type?: "success" | "info" | "error") => void,
-  onTagCreated?: () => void
+  onTagCreated?: () => void,
+  selectedProjectId?: string
 ) {
   const [tagsList, setTagsList] = useState<Tag[]>([]);
   const [newTag, setNewTag] = useState<NewTagForm>({
@@ -17,8 +18,8 @@ export function useTagState(
   });
 
   useEffect(() => {
-    fetchTagsApi().then((data) => setTagsList(data));
-  }, []);
+    fetchTagsApi(selectedProjectId).then((data) => setTagsList(data));
+  }, [selectedProjectId]);
 
   const updateNewTagForm = (fields: Partial<NewTagForm>) => {
     setNewTag((prev) => ({ ...prev, ...fields }));

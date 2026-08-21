@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useOlio } from "@/state/OlioProvider";
 import { checkDomainAvailabilityApi } from "@/api/project.api";
@@ -21,6 +21,22 @@ export const Header: React.FC<HeaderProps> = ({
   const { projectState } = useOlio();
   const selectedProject = projectState.selectedProject;
   const [projectDropdownOpen, setProjectDropdownOpen] = useState<boolean>(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setProjectDropdownOpen(false);
+      }
+    };
+    if (projectDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [projectDropdownOpen]);
 
   // New Website Multi-step Modal state
   const [showNewProjectModal, setShowNewProjectModal] = useState<boolean>(false);
@@ -143,12 +159,18 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Merged Active Website Card with Integrated Theme Toggle & Dropdown */}
-        <div className="relative">
+        <div className="relative" ref={dropdownRef}>
           <div className="flex items-center gap-3 px-3.5 py-1.5 rounded-xl glass-card border border-slate-200/70 dark:border-slate-800/70 shadow-sm">
             {/* Active Website Dropdown Trigger */}
             <button
               type="button"
-              onClick={() => setProjectDropdownOpen(!projectDropdownOpen)}
+              onClick={() => {
+                const nextOpen = !projectDropdownOpen;
+                setProjectDropdownOpen(nextOpen);
+                if (nextOpen && projectState.projects.length === 0) {
+                  projectState.refreshProjects();
+                }
+              }}
               className="flex items-center gap-2.5 min-w-0 text-left hover:opacity-85 transition group"
             >
               <div className="w-8 h-8 rounded-lg bg-brand-500/10 text-brand-500 flex items-center justify-center text-xs shrink-0 group-hover:bg-brand-500 group-hover:text-white transition">
@@ -160,7 +182,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
                 <div className="flex items-center gap-1.5">
                   <p className="text-xs font-bold text-slate-900 dark:text-white truncate leading-tight">
-                    {selectedProject?.name || "Select Website"}
+                    {selectedProject?.name || (projectState.isLoading ? "Loading..." : "Select Website")}
                   </p>
                   <i
                     className={`fa-solid fa-chevron-down text-[9px] text-slate-400 transition-transform duration-200 shrink-0 ${

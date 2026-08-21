@@ -5,6 +5,7 @@ import { AuthForm, UserSession } from "@/models/auth.model";
 import { loginApi, registerApi, logoutApi } from "@/api/auth.api";
 
 export function useAuthStore(showToast?: (msg: string, type?: "success" | "info" | "error") => void) {
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [authView, setAuthView] = useState<"login" | "register">("login");
   const [user, setUser] = useState<UserSession | null>(null);
@@ -25,12 +26,23 @@ export function useAuthStore(showToast?: (msg: string, type?: "success" | "info"
       const tenantId =
         localStorage.getItem("tenant_id") ||
         sessionStorage.getItem("tenant_id");
+      const savedUserStr =
+        localStorage.getItem("olio_user_session") ||
+        sessionStorage.getItem("olio_user_session");
+
       if (token && tenantId) {
         setIsLoggedIn(true);
+        if (savedUserStr) {
+          try {
+            setUser(JSON.parse(savedUserStr));
+          } catch (e) {
+            // ignore
+          }
+        }
       }
+      setIsInitializing(false);
     }
   }, []);
-
 
   const updateAuthForm = (fields: Partial<AuthForm>) => {
     setAuthForm((prev) => ({ ...prev, ...fields }));
@@ -44,6 +56,10 @@ export function useAuthStore(showToast?: (msg: string, type?: "success" | "info"
       if (res.success && res.user) {
         setIsLoggedIn(true);
         setUser(res.user);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("olio_user_session", JSON.stringify(res.user));
+          sessionStorage.setItem("olio_user_session", JSON.stringify(res.user));
+        }
         if (showToast) showToast(res.message || "Signed in successfully!", "success");
         return true;
       } else {
@@ -68,6 +84,10 @@ export function useAuthStore(showToast?: (msg: string, type?: "success" | "info"
         if (res.user) {
           setIsLoggedIn(true);
           setUser(res.user);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("olio_user_session", JSON.stringify(res.user));
+            sessionStorage.setItem("olio_user_session", JSON.stringify(res.user));
+          }
           if (showToast) showToast(res.message || "Account registered successfully!", "success");
         } else {
           setIsLoggedIn(false);
@@ -94,6 +114,18 @@ export function useAuthStore(showToast?: (msg: string, type?: "success" | "info"
       setIsLoggedIn(false);
       setUser(null);
       setAuthView("login");
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("olio_user_session");
+        sessionStorage.removeItem("olio_user_session");
+        localStorage.removeItem("supabase_access_token");
+        sessionStorage.removeItem("supabase_access_token");
+        localStorage.removeItem("supabase_refresh_token");
+        sessionStorage.removeItem("supabase_refresh_token");
+        localStorage.removeItem("tenant_id");
+        sessionStorage.removeItem("tenant_id");
+        localStorage.removeItem("selected_project_id");
+        sessionStorage.removeItem("selected_project_id");
+      }
       if (showToast) showToast("Logged out of OlioCMS", "info");
     } finally {
       setIsLoading(false);
@@ -101,6 +133,7 @@ export function useAuthStore(showToast?: (msg: string, type?: "success" | "info"
   };
 
   return {
+    isInitializing,
     isLoggedIn,
     authView,
     setAuthView,
@@ -113,3 +146,4 @@ export function useAuthStore(showToast?: (msg: string, type?: "success" | "info"
     handleLogout,
   };
 }
+

@@ -7,7 +7,7 @@ const API_BASE_URL = APP_CONFIG.apiBaseUrl;
 
 export const DEFAULT_PROJECTS: Project[] = [];
 
-export async function fetchProjectsApi(): Promise<Project[]> {
+export async function fetchProjectsApi(): Promise<{ projects: Project[]; success: boolean }> {
   logger.info("Fetching projects list from API...");
   try {
     const res = await fetch(`${API_BASE_URL}/projects?limit=100`, {
@@ -18,28 +18,34 @@ export async function fetchProjectsApi(): Promise<Project[]> {
       const items = data.data || data.items || data;
       if (Array.isArray(items)) {
         logger.success(`Fetched ${items.length} projects successfully from backend.`);
-        return items.map((p: any, idx: number) => ({
-          id: String(p.id),
-          name: p.name,
-          domain: p.domain || undefined,
-          defaultDomain: p.default_domain || p.domain || undefined,
-          code: p.name.substring(0, 3).toUpperCase(),
-          icon: "fa-folder-tree",
-          color:
-            idx % 3 === 0
-              ? "from-blue-500 to-indigo-600"
-              : idx % 3 === 1
-              ? "from-purple-500 to-pink-500"
-              : "from-emerald-500 to-teal-600",
-          isDefault: idx === 0,
-        }));
+        return {
+          projects: items.map((p: any, idx: number) => ({
+            id: String(p.id),
+            name: p.name,
+            domain: p.domain || undefined,
+            defaultDomain: p.default_domain || p.domain || undefined,
+            code: p.name.substring(0, 3).toUpperCase(),
+            icon: "fa-folder-tree",
+            color:
+              idx % 3 === 0
+                ? "from-blue-500 to-indigo-600"
+                : idx % 3 === 1
+                ? "from-purple-500 to-pink-500"
+                : "from-emerald-500 to-teal-600",
+            isDefault: idx === 0,
+          })),
+          success: true,
+        };
       }
+    } else {
+      logger.warn(`Failed to fetch projects from backend API (Status: ${res.status})`);
     }
   } catch (err) {
     logger.warn("Failed to fetch projects from backend API:", err);
   }
-  return [];
+  return { projects: [], success: false };
 }
+
 
 export async function checkDomainAvailabilityApi(
   defaultDomain?: string,

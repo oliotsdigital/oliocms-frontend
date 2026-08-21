@@ -6,7 +6,8 @@ import { fetchCategoriesApi, createCategoryApi, deleteCategoryApi } from "@/api/
 
 export function useCategoryState(
   showToast?: (msg: string, type?: "success" | "info" | "error") => void,
-  onCategoryCreated?: () => void
+  onCategoryCreated?: () => void,
+  selectedProjectId?: string
 ) {
   const [categoriesList, setCategoriesList] = useState<Category[]>([]);
   const [newCategory, setNewCategory] = useState<NewCategoryForm>({
@@ -18,8 +19,8 @@ export function useCategoryState(
   });
 
   useEffect(() => {
-    fetchCategoriesApi().then((data) => setCategoriesList(data));
-  }, []);
+    fetchCategoriesApi(selectedProjectId).then((data) => setCategoriesList(data));
+  }, [selectedProjectId]);
 
   const updateNewCategoryForm = (fields: Partial<NewCategoryForm>) => {
     setNewCategory((prev) => ({ ...prev, ...fields }));

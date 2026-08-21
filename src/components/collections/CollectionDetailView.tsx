@@ -153,6 +153,14 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
                 <i className="fa-solid fa-file-import text-xs"></i> Import Data
               </label>
 
+              <Link
+                href={`/collections/${schema.id}/apis`}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                title="View & test public REST APIs for this collection"
+              >
+                <i className="fa-solid fa-code text-xs text-brand-500"></i> Get APIs
+              </Link>
+
               <button
                 onClick={handleExportData}
                 className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 transition text-xs font-bold flex items-center gap-1.5"

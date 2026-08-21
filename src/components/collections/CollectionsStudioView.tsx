@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { CollectionSchema, FieldDefinition, FieldType } from "@/models/collection.model";
 import { updateCollectionSchemaApi, deleteCollectionSchemaApi } from "@/api/collection.api";
+import { useSearchParams } from "next/navigation";
 import { SchemaBuilderModal, AVAILABLE_ICONS } from "./SchemaBuilderModal";
 import { AddFieldModal } from "./AddFieldModal";
 import { SelectIconModal } from "./SelectIconModal";
@@ -21,6 +22,8 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
   loading,
   onRefresh,
 }) => {
+  const searchParams = useSearchParams();
+  const urlId = searchParams.get("id");
   const { toast, collectionsState } = useOlio();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -35,16 +38,25 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [showJsonPreview, setShowJsonPreview] = useState(false);
 
-  // Automatically select the first collection when loaded or when selection is invalid
+  // Automatically select target collection from URL or fallback to first collection
   useEffect(() => {
     if (collections.length > 0) {
-      const currentExists = collections.some((c) => c.id === selectedId);
-      if (!selectedId || !currentExists) {
-        const first = collections[0];
-        setSelectedId(first.id);
-        setEditingName(first.name);
-        setEditingIcon(first.icon || "fa-cube");
-        setEditingFields(JSON.parse(JSON.stringify(first.schema_definition || [])));
+      const targetCol = urlId ? collections.find((c) => c.id === urlId) : null;
+
+      if (targetCol) {
+        setSelectedId(targetCol.id);
+        setEditingName(targetCol.name);
+        setEditingIcon(targetCol.icon || "fa-cube");
+        setEditingFields(JSON.parse(JSON.stringify(targetCol.schema_definition || [])));
+      } else {
+        const currentExists = collections.some((c) => c.id === selectedId);
+        if (!selectedId || !currentExists) {
+          const first = collections[0];
+          setSelectedId(first.id);
+          setEditingName(first.name);
+          setEditingIcon(first.icon || "fa-cube");
+          setEditingFields(JSON.parse(JSON.stringify(first.schema_definition || [])));
+        }
       }
     } else {
       setSelectedId(null);
@@ -52,7 +64,7 @@ export const CollectionsStudioView: React.FC<CollectionsStudioViewProps> = ({
       setEditingIcon("fa-cube");
       setEditingFields([]);
     }
-  }, [collections]);
+  }, [collections, urlId]);
 
   // Sync edit state when user selects a collection from sidebar
   const handleSelectCollection = (col: CollectionSchema) => {

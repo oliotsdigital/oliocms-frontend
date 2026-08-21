@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useOlio } from "@/state/OlioProvider";
 import { CollectionSchema } from "@/models/collection.model";
 import { fetchCollectionsApi } from "@/api/collection.api";
 import { CollectionsStudioView } from "@/components/collections/CollectionsStudioView";
 
-export default function CollectionsPage() {
+function CollectionsContent() {
   const { projectState } = useOlio();
   const selectedProject = projectState.selectedProject;
   const [collections, setCollections] = useState<CollectionSchema[]>([]);
@@ -25,13 +25,21 @@ export default function CollectionsPage() {
   }, [selectedProject?.id]);
 
   return (
+    <CollectionsStudioView
+      collections={collections}
+      loading={loading}
+      onRefresh={loadCollections}
+      selectedProjectId={selectedProject?.id}
+    />
+  );
+}
+
+export default function CollectionsPage() {
+  return (
     <AppLayout pageTitle="Dynamic Collections">
-      <CollectionsStudioView
-        collections={collections}
-        loading={loading}
-        onRefresh={loadCollections}
-        selectedProjectId={selectedProject?.id}
-      />
+      <Suspense fallback={<div className="h-64 rounded-2xl glass-panel animate-pulse" />}>
+        <CollectionsContent />
+      </Suspense>
     </AppLayout>
   );
 }

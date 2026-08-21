@@ -156,6 +156,14 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
                 <i className="fa-solid fa-file-export text-xs"></i> Export Data
               </button>
 
+              <Link
+                href={`/collections?id=${schema.id}`}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 transition text-xs font-bold flex items-center gap-1.5"
+                title="Edit Collection Schema & Fields"
+              >
+                <i className="fa-solid fa-pen-to-square text-xs"></i> Edit Collection
+              </Link>
+
               <button
                 onClick={loadData}
                 className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-brand-500 transition text-xs font-bold flex items-center gap-1.5"
@@ -164,12 +172,12 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
                 <i className="fa-solid fa-arrows-rotate text-xs"></i> Refresh
               </button>
 
-              <button
-                onClick={() => setIsAddModalOpen(true)}
+              <Link
+                href={`/collections/${schema.id}/add-record`}
                 className="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition transform active:scale-95 flex items-center gap-2 shrink-0"
               >
                 <i className="fa-solid fa-plus text-xs"></i> Add {schema.name}
-              </button>
+              </Link>
             </div>
           </div>
         )}

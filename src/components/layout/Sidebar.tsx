@@ -17,7 +17,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isFirstWebsite
   const pathname = usePathname();
   const { collectionsState } = useOlio();
   const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(false);
-  const [productsHover, setProductsHover] = useState<boolean>(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState<boolean>(false);
 
   const isNavActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
@@ -27,7 +26,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isFirstWebsite
       onMouseEnter={() => setSidebarExpanded(true)}
       onMouseLeave={() => {
         setSidebarExpanded(false);
-        setProductsHover(false);
       }}
       className={`fixed top-0 left-0 h-full glass-panel transition-all duration-300 ease-in-out flex flex-col border-r border-slate-200/50 dark:border-slate-800/50 hidden md:flex ${
         isFirstWebsiteModalOpen ? "z-[110]" : "z-40"
@@ -168,120 +166,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isFirstWebsite
             }`}
           >
             Collections
-          </span>
-        </Link>
-
-
-        {/* Products (With Submenu on Hover) */}
-        <div className="relative">
-          <Link
-            href="/products"
-            onMouseEnter={() => !isFirstWebsiteModalOpen && setProductsHover(true)}
-            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group relative ${
-              isNavActive("/products")
-                ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
-                : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <i className="fa-solid fa-box text-sm w-5 text-center"></i>
-              <span
-                className={`whitespace-nowrap transition-opacity duration-200 ${
-                  sidebarExpanded ? "opacity-100" : "opacity-0 w-0 hidden"
-                }`}
-              >
-                Products
-              </span>
-            </div>
-            <i
-              className={`fa-solid fa-chevron-right text-[10px] transition-transform duration-200 ${
-                sidebarExpanded ? "opacity-100" : "opacity-0 hidden"
-              }`}
-            ></i>
-          </Link>
-
-          {productsHover && sidebarExpanded && !isFirstWebsiteModalOpen && (
-            <div className="pl-9 pr-2 py-1 space-y-1 mt-1 transition-all">
-              <Link
-                href="/products"
-                className={`block w-full text-left py-1 px-2.5 rounded-lg text-[11px] transition ${
-                  pathname === "/products"
-                    ? "text-brand-500 font-bold"
-                    : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                }`}
-              >
-                • All Products
-              </Link>
-              <Link
-                href="/products?action=add"
-                className={`block w-full text-left py-1 px-2.5 rounded-lg text-[11px] transition ${
-                  pathname === "/products" &&
-                  typeof window !== "undefined" &&
-                  window.location.search.includes("add")
-                    ? "text-brand-500 font-bold"
-                    : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                }`}
-              >
-                • Add Product
-              </Link>
-            </div>
-          )}
-        </div>
-
-        {/* Brands */}
-        <Link
-          href="/brand"
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all group relative ${
-            isNavActive("/brand") || isNavActive("/brands")
-              ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
-              : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white"
-          }`}
-        >
-          <i className="fa-solid fa-copyright text-sm w-5 text-center"></i>
-          <span
-            className={`whitespace-nowrap transition-opacity duration-200 ${
-              sidebarExpanded ? "opacity-100" : "opacity-0 w-0 hidden"
-            }`}
-          >
-            Brands
-          </span>
-        </Link>
-
-        {/* Categories */}
-        <Link
-          href="/categories"
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all group relative ${
-            isNavActive("/categories")
-              ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
-              : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white"
-          }`}
-        >
-          <i className="fa-solid fa-layer-group text-sm w-5 text-center"></i>
-          <span
-            className={`whitespace-nowrap transition-opacity duration-200 ${
-              sidebarExpanded ? "opacity-100" : "opacity-0 w-0 hidden"
-            }`}
-          >
-            Categories
-          </span>
-        </Link>
-
-        {/* Tags */}
-        <Link
-          href="/tags"
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all group relative ${
-            isNavActive("/tags")
-              ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
-              : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white"
-          }`}
-        >
-          <i className="fa-solid fa-hashtag text-sm w-5 text-center"></i>
-          <span
-            className={`whitespace-nowrap transition-opacity duration-200 ${
-              sidebarExpanded ? "opacity-100" : "opacity-0 w-0 hidden"
-            }`}
-          >
-            Tags
           </span>
         </Link>
       </nav>

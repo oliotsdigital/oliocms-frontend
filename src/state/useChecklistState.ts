@@ -15,10 +15,7 @@ export function useChecklistState() {
     }
     return {
       profile: true,
-      categories: true,
-      brands: true,
-      tags: false,
-      firstProduct: false,
+      collections: false,
     };
   });
 

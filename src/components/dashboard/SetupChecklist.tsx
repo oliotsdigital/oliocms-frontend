@@ -28,10 +28,7 @@ export const SetupChecklist: React.FC<SetupChecklistProps> = ({
     href: string;
   }[] = [
     { key: "profile", label: "Complete user profile", href: "/profile-settings" },
-    { key: "categories", label: "Create initial categories", href: "/categories" },
-    { key: "brands", label: "Configure brand taxonomy", href: "/brand" },
-    { key: "tags", label: "Define content tags", href: "/tags" },
-    { key: "firstProduct", label: "Publish first product", href: "/products" },
+    { key: "collections", label: "Explore content collections", href: "/collections" },
   ];
 
   return (

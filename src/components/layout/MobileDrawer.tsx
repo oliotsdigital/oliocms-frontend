@@ -204,51 +204,6 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             >
               <i className="fa-solid fa-database"></i> Collections
             </Link>
-
-            <Link
-              href="/products"
-              onClick={onClose}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium ${
-                isNavActive("/products")
-                  ? "bg-brand-500 text-white"
-                  : "text-slate-600 dark:text-slate-300"
-              }`}
-            >
-              <i className="fa-solid fa-box"></i> Products
-            </Link>
-            <Link
-              href="/brand"
-              onClick={onClose}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium ${
-                isNavActive("/brand") || isNavActive("/brands")
-                  ? "bg-brand-500 text-white"
-                  : "text-slate-600 dark:text-slate-300"
-              }`}
-            >
-              <i className="fa-solid fa-copyright"></i> Brands
-            </Link>
-            <Link
-              href="/categories"
-              onClick={onClose}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium ${
-                isNavActive("/categories")
-                  ? "bg-brand-500 text-white"
-                  : "text-slate-600 dark:text-slate-300"
-              }`}
-            >
-              <i className="fa-solid fa-layer-group"></i> Categories
-            </Link>
-            <Link
-              href="/tags"
-              onClick={onClose}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium ${
-                isNavActive("/tags")
-                  ? "bg-brand-500 text-white"
-                  : "text-slate-600 dark:text-slate-300"
-              }`}
-            >
-              <i className="fa-solid fa-hashtag"></i> Tags
-            </Link>
           </nav>
         </div>
 

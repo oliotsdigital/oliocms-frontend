@@ -7,7 +7,7 @@ import { SetupChecklist } from "./SetupChecklist";
 import { QuickStatsGrid } from "./QuickStatsGrid";
 
 export const DashboardContent: React.FC = () => {
-  const { auth, checklist, products, categories, brands, media } = useOlio();
+  const { auth, checklist, media, collectionsState } = useOlio();
 
   return (
     <div className="space-y-6">
@@ -24,9 +24,7 @@ export const DashboardContent: React.FC = () => {
       />
 
       <QuickStatsGrid
-        totalProducts={products.productsList.length}
-        totalCategories={categories.categoriesList.length}
-        totalBrands={brands.brandsList.length}
+        totalCollections={collectionsState.collections.length}
         totalMedia={media.mediaList.length}
       />
     </div>

@@ -11,7 +11,14 @@ const SESSION_KEYS = [
   "olio_user_session",
 ] as const;
 
-const AUTH_SKIP_PATHS = ["/auth/login", "/auth/register", "/auth/refresh"];
+const AUTH_SKIP_PATHS = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/refresh",
+  "/auth/logout",
+  "/health",
+  "/public/",
+];
 
 let refreshInFlight: Promise<boolean> | null = null;
 let redirectingToLogin = false;
@@ -51,31 +58,61 @@ function redirectToLogin(): void {
   window.location.replace("/login");
 }
 
-/**
- * Returns standard headers required for all authenticated API endpoints:
- * - Authorization: Bearer <supabase_access_token>
- * - X-Tenant-Id: <tenant_id>
- * - X-Project-Id: <selected_project_id>
- */
-export function getAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (typeof window !== "undefined") {
-    const token = readStored("supabase_access_token");
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-    const tenantId = readStored("tenant_id");
-    if (tenantId) {
-      headers["X-Tenant-Id"] = tenantId;
-    }
-    const projectId = readStored("selected_project_id");
-    if (projectId) {
-      headers["X-Project-Id"] = projectId;
-    }
+/** No auth, no tenant — login, register, refresh, logout, health. */
+export function getPublicHeaders(): Record<string, string> {
+  return { "Content-Type": "application/json" };
+}
+
+/** Bearer only — change-password, super-admin /tenants. */
+export function getBearerHeaders(): Record<string, string> {
+  const headers = getPublicHeaders();
+  const token = readStored("supabase_access_token");
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
   return headers;
+}
+
+export function getSelectedProjectId(): string | null {
+  return readStored("selected_project_id");
+}
+
+/** Bearer + X-Tenant-Id — /projects, /users (including /users/me). */
+export function getCmsHeaders(): Record<string, string> {
+  const headers = getBearerHeaders();
+  const tenantId = readStored("tenant_id");
+  if (tenantId) {
+    headers["X-Tenant-Id"] = tenantId;
+  }
+  return headers;
+}
+
+/** CMS collections — JWT + X-Tenant-Id + X-Project-Id. */
+export function getCollectionHeaders(projectId?: string): Record<string, string> {
+  const headers = getCmsHeaders();
+  const id = projectId || getSelectedProjectId();
+  if (id) {
+    headers["X-Project-Id"] = id;
+  }
+  return headers;
+}
+
+/** Storefront public API — X-API-Key + project id, no JWT, no X-Tenant-Id. */
+export function getPublicApiHeaders(apiKey: string, projectId?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "X-API-Key": apiKey,
+  };
+  const id = projectId || getSelectedProjectId();
+  if (id) {
+    headers["X-Project-Id"] = id;
+  }
+  return headers;
+}
+
+/** CMS headers for projects/users. */
+export function getAuthHeaders(): Record<string, string> {
+  return getCmsHeaders();
 }
 
 function isExpiredTokenError(status: number, body: unknown): boolean {

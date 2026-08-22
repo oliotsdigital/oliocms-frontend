@@ -16,7 +16,8 @@ type CodeTab = "nextjs" | "curl" | "js" | "python";
 type EndpointTab = "list" | "single" | "schema";
 
 export const CollectionApisView: React.FC<CollectionApisViewProps> = ({ collectionId }) => {
-  const { toast } = useOlio();
+  const { toast, projectState } = useOlio();
+  const selectedProjectId = projectState.selectedProject?.id;
   const [schema, setSchema] = useState<CollectionSchema | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -76,10 +77,24 @@ export const CollectionApisView: React.FC<CollectionApisViewProps> = ({ collecti
     return str ? `?${str}` : "";
   };
 
+  const projectId = selectedProjectId || schema?.project_id || "";
+
+  const appendProjectId = (url: string) => {
+    if (!projectId) return url;
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}project_id=${encodeURIComponent(projectId)}`;
+  };
+
   const currentQueryString = buildQueryString();
-  const listEndpointUrl = schema ? `${apiBaseUrl}/public/${schema.slug}${currentQueryString}` : "";
-  const singleEndpointUrl = schema ? `${apiBaseUrl}/public/${schema.slug}/${singleRecordId || ":record_id"}` : "";
-  const schemaEndpointUrl = schema ? `${apiBaseUrl}/public/${schema.slug}/schema` : "";
+  const listEndpointUrl = schema
+    ? appendProjectId(`${apiBaseUrl}/public/${schema.slug}${currentQueryString}`)
+    : "";
+  const singleEndpointUrl = schema
+    ? appendProjectId(`${apiBaseUrl}/public/${schema.slug}/${singleRecordId || ":record_id"}`)
+    : "";
+  const schemaEndpointUrl = schema
+    ? appendProjectId(`${apiBaseUrl}/public/${schema.slug}/schema`)
+    : "";
 
   const activeEndpointUrl =
     activeEndpoint === "list"
@@ -130,7 +145,8 @@ export const CollectionApisView: React.FC<CollectionApisViewProps> = ({ collecti
       const res = await fetch(activeEndpointUrl, {
         headers: {
           "X-API-Key": publicApiKey,
-          "X-Tenant-Id": schema?.tenant_id || "",
+          Accept: "application/json",
+          ...(projectId ? { "X-Project-Id": projectId } : {}),
         },
       });
 
@@ -159,7 +175,7 @@ export default async function ${schema?.name.replace(/[^a-zA-Z0-9]/g, "") || "Co
     '${activeEndpointUrl}',
     {
       headers: {
-        'X-API-Key': '${publicApiKey}'
+        'X-API-Key': '${publicApiKey}'${projectId ? `,\n        'X-Project-Id': '${projectId}'` : ""}
       },
       next: { revalidate: 60 }
     }
@@ -179,7 +195,7 @@ export default async function ${schema?.name.replace(/[^a-zA-Z0-9]/g, "") || "Co
 
   const getCurlSnippet = () => {
     return `curl -X GET "${activeEndpointUrl}" \\
-  -H "X-API-Key: ${publicApiKey}" \\
+  -H "X-API-Key: ${publicApiKey}" \\${projectId ? `\n  -H "X-Project-Id: ${projectId}" \\` : ""}
   -H "Accept: application/json"`;
   };
 
@@ -189,7 +205,7 @@ async function get${schema?.name.replace(/[^a-zA-Z0-9]/g, "") || "Collection"}Da
   const response = await fetch('${activeEndpointUrl}', {
     method: 'GET',
     headers: {
-      'X-API-Key': '${publicApiKey}',
+      'X-API-Key': '${publicApiKey}',${projectId ? `\n      'X-Project-Id': '${projectId}',` : ""}
       'Content-Type': 'application/json'
     }
   });
@@ -208,7 +224,7 @@ import requests
 
 url = "${activeEndpointUrl}"
 headers = {
-    "X-API-Key": "${publicApiKey}"
+    "X-API-Key": "${publicApiKey}"${projectId ? `,\n    "X-Project-Id": "${projectId}"` : ""}
 }
 
 response = requests.get(url, headers=headers)
@@ -237,6 +253,7 @@ print(data)`;
     tpl = tpl.replace(/{{COLLECTION_SLUG}}/g, schema.slug);
     tpl = tpl.replace(/{{ENDPOINT_URL}}/g, activeEndpointUrl);
     tpl = tpl.replace(/{{API_KEY}}/g, publicApiKey);
+    tpl = tpl.replace(/{{PROJECT_ID}}/g, projectId);
     tpl = tpl.replace(/{{SCHEMA_FIELDS}}/g, fieldsStr);
     return tpl;
   };
@@ -336,9 +353,22 @@ print(data)`;
                   </button>
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-slate-400">
-                  <span>Header: <code className="text-slate-200">X-API-Key</code></span>
+                  <span>
+                    Headers: <code className="text-slate-200">X-API-Key</code>
+                    {projectId && (
+                      <>
+                        {" + "}
+                        <code className="text-slate-200">X-Project-Id</code>
+                      </>
+                    )}
+                  </span>
                   <button
-                    onClick={() => handleCopy(`${apiBaseUrl}/public/${schema.slug}`, "Base URL")}
+                    onClick={() =>
+                      handleCopy(
+                        appendProjectId(`${apiBaseUrl}/public/${schema.slug}`),
+                        "Base URL"
+                      )
+                    }
                     className="text-brand-400 hover:underline flex items-center gap-1"
                   >
                     <i className="fa-solid fa-link text-[10px]"></i> Base URL

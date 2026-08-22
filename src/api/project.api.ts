@@ -1,6 +1,6 @@
 import { Project, NewProjectForm } from "@/models/project.model";
 import { APP_CONFIG } from "@/config/app.config";
-import { apiFetch, getAuthHeaders } from "./client";
+import { apiFetch, getCmsHeaders } from "./client";
 import { logger } from "@/utils/logger";
 
 const API_BASE_URL = APP_CONFIG.apiBaseUrl;
@@ -11,7 +11,7 @@ export async function fetchProjectsApi(): Promise<{ projects: Project[]; success
   logger.info("Fetching projects list from API...");
   try {
     const res = await apiFetch(`${API_BASE_URL}/projects?limit=100`, {
-      headers: getAuthHeaders(),
+      headers: getCmsHeaders(),
     });
     if (res.ok) {
       const data = await res.json();
@@ -57,7 +57,7 @@ export async function checkDomainAvailabilityApi(
     if (customDomain) params.append("domain", customDomain);
 
     const res = await apiFetch(`${API_BASE_URL}/projects/check-domain?${params.toString()}`, {
-      headers: getAuthHeaders(),
+      headers: getCmsHeaders(),
     });
     if (res.ok) {
       const data = await res.json();
@@ -79,7 +79,7 @@ export async function createProjectApi(
   try {
     const res = await apiFetch(`${API_BASE_URL}/projects`, {
       method: "POST",
-      headers: getAuthHeaders(),
+      headers: getCmsHeaders(),
       body: JSON.stringify({
         name: form.name,
         domain: form.domain || undefined,
@@ -143,7 +143,7 @@ export async function updateProjectApi(
   try {
     const res = await apiFetch(`${API_BASE_URL}/projects/${id}`, {
       method: "PUT",
-      headers: getAuthHeaders(),
+      headers: getCmsHeaders(),
       body: JSON.stringify({
         name: data.name,
         domain: data.domain !== undefined ? (data.domain || null) : undefined,
@@ -183,7 +183,7 @@ export async function deleteProjectApi(id: string): Promise<{ success: boolean; 
   try {
     const res = await apiFetch(`${API_BASE_URL}/projects/${id}`, {
       method: "DELETE",
-      headers: getAuthHeaders(),
+      headers: getCmsHeaders(),
     });
     if (res.ok || res.status === 204) {
       logger.success(`Project ${id} deleted successfully.`);

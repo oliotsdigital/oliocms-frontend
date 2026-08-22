@@ -1,9 +1,7 @@
 import { AuthForm, AuthResponse, UserSession } from "@/models/auth.model";
 import { APP_CONFIG } from "@/config/app.config";
 import { logger } from "@/utils/logger";
-import { apiFetch, getAuthHeaders } from "./client";
-
-export { getAuthHeaders };
+import { apiFetch, getPublicHeaders, getBearerHeaders } from "./client";
 
 const API_BASE_URL = APP_CONFIG.apiBaseUrl;
 
@@ -156,7 +154,7 @@ export async function logoutApi(): Promise<{ success: boolean }> {
       try {
         await fetch(`${API_BASE_URL}/auth/logout`, {
           method: "POST",
-          headers: getAuthHeaders(),
+          headers: getPublicHeaders(),
         });
       } catch (_) {
         // Ignore logout network errors
@@ -185,7 +183,7 @@ export async function changePasswordApi(newPassword: string): Promise<{ success:
   try {
     const res = await apiFetch(`${API_BASE_URL}/auth/change-password`, {
       method: "POST",
-      headers: getAuthHeaders(),
+      headers: getBearerHeaders(),
       body: JSON.stringify({ new_password: newPassword }),
     });
 

@@ -13,6 +13,7 @@ API Details:
 - Method: GET
 - Headers:
   - X-API-Key: {{API_KEY}}
+  - X-Project-Id: {{PROJECT_ID}}
   - Accept: application/json
 
 Collection Schema Fields:

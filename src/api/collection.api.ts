@@ -30,8 +30,7 @@ export async function fetchCollectionsApi(projectId?: string): Promise<Collectio
 
   logger.info(`Fetching collection schemas for project ${selectedProjId}...`);
   try {
-    const url = `${API_BASE_URL}/collections?project_id=${encodeURIComponent(selectedProjId)}`;
-    const res = await apiFetch(url, {
+    const res = await apiFetch(`${API_BASE_URL}/collections`, {
       headers: getCollectionHeaders(selectedProjId),
     });
     if (res.ok) {
@@ -65,12 +64,9 @@ export async function fetchCollectionSchemaApi(
   }
   logger.info(`Fetching collection schema details for ID: ${collectionId}`);
   try {
-    const res = await apiFetch(
-      `${API_BASE_URL}/collections/${collectionId}?project_id=${encodeURIComponent(selectedProjId)}`,
-      {
-        headers: getCollectionHeaders(selectedProjId),
-      }
-    );
+    const res = await apiFetch(`${API_BASE_URL}/collections/${collectionId}`, {
+      headers: getCollectionHeaders(selectedProjId),
+    });
     if (res.ok) {
       const data = await res.json();
       return data;
@@ -127,14 +123,11 @@ export async function updateCollectionSchemaApi(
   }
   logger.info(`Updating collection schema ID: ${collectionId}...`, payload);
   try {
-    const res = await apiFetch(
-      `${API_BASE_URL}/collections/${collectionId}?project_id=${encodeURIComponent(selectedProjId)}`,
-      {
-        method: "PUT",
-        headers: getCollectionHeaders(selectedProjId),
-        body: JSON.stringify(payload),
-      }
-    );
+    const res = await apiFetch(`${API_BASE_URL}/collections/${collectionId}`, {
+      method: "PUT",
+      headers: getCollectionHeaders(selectedProjId),
+      body: JSON.stringify(payload),
+    });
     const data = await res.json();
     if (res.ok) {
       logger.success("Collection schema updated successfully on API.", data);
@@ -160,13 +153,10 @@ export async function deleteCollectionSchemaApi(
     return { success: false, error: "Select a website before deleting a collection." };
   }
   try {
-    const res = await apiFetch(
-      `${API_BASE_URL}/collections/${collectionId}?project_id=${encodeURIComponent(selectedProjId)}`,
-      {
-        method: "DELETE",
-        headers: getCollectionHeaders(selectedProjId),
-      }
-    );
+    const res = await apiFetch(`${API_BASE_URL}/collections/${collectionId}`, {
+      method: "DELETE",
+      headers: getCollectionHeaders(selectedProjId),
+    });
     if (res.ok || res.status === 204) {
       return { success: true };
     }
@@ -194,13 +184,16 @@ export async function fetchCollectionRecordsApi(
   logger.info(`Fetching records for collection ${collectionId}...`, filters);
   try {
     const queryParams = new URLSearchParams();
-    queryParams.set("project_id", selectedProjId);
     if (filters) {
       Object.entries(filters).forEach(([k, v]) => {
         if (v !== undefined && v !== "") queryParams.append(k, v);
       });
     }
-    const res = await apiFetch(`${API_BASE_URL}/collections/${collectionId}/records?${queryParams}`, {
+    const qs = queryParams.toString();
+    const url = qs
+      ? `${API_BASE_URL}/collections/${collectionId}/records?${qs}`
+      : `${API_BASE_URL}/collections/${collectionId}/records`;
+    const res = await apiFetch(url, {
       headers: getCollectionHeaders(selectedProjId),
     });
     if (res.ok) {
@@ -227,14 +220,11 @@ export async function createCollectionRecordApi(
   }
   logger.info(`Ingesting record for collection ${collectionId}`, data);
   try {
-    const res = await apiFetch(
-      `${API_BASE_URL}/collections/${collectionId}/records?project_id=${encodeURIComponent(selectedProjId)}`,
-      {
-        method: "POST",
-        headers: getCollectionHeaders(selectedProjId),
-        body: JSON.stringify({ data }),
-      }
-    );
+    const res = await apiFetch(`${API_BASE_URL}/collections/${collectionId}/records`, {
+      method: "POST",
+      headers: getCollectionHeaders(selectedProjId),
+      body: JSON.stringify({ data }),
+    });
     const resJson = await res.json();
     if (res.ok) {
       logger.success("Record created successfully on backend API.", resJson);
@@ -262,7 +252,7 @@ export async function deleteCollectionRecordApi(
   }
   try {
     const res = await apiFetch(
-      `${API_BASE_URL}/collections/${collectionId}/records/${recordId}?project_id=${encodeURIComponent(selectedProjId)}`,
+      `${API_BASE_URL}/collections/${collectionId}/records/${recordId}`,
       {
         method: "DELETE",
         headers: getCollectionHeaders(selectedProjId),

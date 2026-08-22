@@ -79,22 +79,12 @@ export const CollectionApisView: React.FC<CollectionApisViewProps> = ({ collecti
 
   const projectId = selectedProjectId || schema?.project_id || "";
 
-  const appendProjectId = (url: string) => {
-    if (!projectId) return url;
-    const sep = url.includes("?") ? "&" : "?";
-    return `${url}${sep}project_id=${encodeURIComponent(projectId)}`;
-  };
-
   const currentQueryString = buildQueryString();
-  const listEndpointUrl = schema
-    ? appendProjectId(`${apiBaseUrl}/public/${schema.slug}${currentQueryString}`)
-    : "";
+  const listEndpointUrl = schema ? `${apiBaseUrl}/public/${schema.slug}${currentQueryString}` : "";
   const singleEndpointUrl = schema
-    ? appendProjectId(`${apiBaseUrl}/public/${schema.slug}/${singleRecordId || ":record_id"}`)
+    ? `${apiBaseUrl}/public/${schema.slug}/${singleRecordId || ":record_id"}`
     : "";
-  const schemaEndpointUrl = schema
-    ? appendProjectId(`${apiBaseUrl}/public/${schema.slug}/schema`)
-    : "";
+  const schemaEndpointUrl = schema ? `${apiBaseUrl}/public/${schema.slug}/schema` : "";
 
   const activeEndpointUrl =
     activeEndpoint === "list"
@@ -363,12 +353,7 @@ print(data)`;
                     )}
                   </span>
                   <button
-                    onClick={() =>
-                      handleCopy(
-                        appendProjectId(`${apiBaseUrl}/public/${schema.slug}`),
-                        "Base URL"
-                      )
-                    }
+                    onClick={() => handleCopy(`${apiBaseUrl}/public/${schema.slug}`, "Base URL")}
                     className="text-brand-400 hover:underline flex items-center gap-1"
                   >
                     <i className="fa-solid fa-link text-[10px]"></i> Base URL

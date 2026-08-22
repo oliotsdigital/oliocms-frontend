@@ -7,10 +7,6 @@ export { getAuthHeaders };
 
 const API_BASE_URL = APP_CONFIG.apiBaseUrl;
 
-const DEFAULT_AVATAR =
-  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150";
-
-
 export async function loginApi(form: AuthForm): Promise<AuthResponse> {
   if (!form.email || !form.password) {
     logger.warn("Login attempt rejected: Missing email or password.");
@@ -59,7 +55,7 @@ export async function loginApi(form: AuthForm): Promise<AuthResponse> {
       name: data.user?.full_name || form.email.split("@")[0],
       email: data.user?.email || form.email,
       role: data.user?.tenants?.[0]?.role || "Admin",
-      avatar: DEFAULT_AVATAR,
+      avatar: data.user?.avatar || "",
       apiKey: data.access_token || "",
     };
 
@@ -130,7 +126,7 @@ export async function registerApi(form: AuthForm): Promise<AuthResponse> {
       name: userObj?.full_name || form.email.split("@")[0],
       email: userObj?.email || form.email,
       role: userObj?.tenants?.[0]?.role || "Admin",
-      avatar: DEFAULT_AVATAR,
+      avatar: userObj?.avatar || "",
       apiKey: sessionData?.access_token || "",
     };
 

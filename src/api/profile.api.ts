@@ -1,22 +1,20 @@
 import { UserProfile } from "@/models/profile.model";
 
-const DEFAULT_PROFILE: UserProfile = {
-  name: "Alex Morgan",
-  email: "alex.morgan@oliocms.io",
-  role: "Master CMS Administrator",
-  avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150",
-  apiKey: "olio_live_9921a881bc334ef",
+const EMPTY_PROFILE: UserProfile = {
+  name: "",
+  email: "",
+  role: "",
+  avatar: "",
+  apiKey: "",
 };
 
 export async function fetchProfileApi(): Promise<UserProfile> {
-  await new Promise((res) => setTimeout(res, 200));
-  return { ...DEFAULT_PROFILE };
+  return { ...EMPTY_PROFILE };
 }
 
 export async function updateProfileApi(updated: Partial<UserProfile>): Promise<UserProfile> {
-  await new Promise((res) => setTimeout(res, 300));
   return {
-    ...DEFAULT_PROFILE,
+    ...EMPTY_PROFILE,
     ...updated,
   };
 }

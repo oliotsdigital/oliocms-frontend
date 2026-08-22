@@ -36,7 +36,7 @@ export function OlioProvider({ children }: { children: React.ReactNode }) {
 
   const profile = useProfileState(toast.showToast, () => {
     checklist.markCompleted("profile");
-  });
+  }, auth.user);
 
   const media = useMediaState(toast.showToast, activeProjectId);
 

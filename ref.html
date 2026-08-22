@@ -346,11 +346,14 @@
             <div class="p-2 border-t border-slate-200/30 dark:border-slate-800/30 relative">
                 <button @click="profileMenuOpen = !profileMenuOpen" 
                         class="w-full flex items-center gap-3 p-2 rounded-xl glass-card hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition">
-                    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150" 
+                    <img x-show="user.avatar" :src="user.avatar"
                          alt="User Profile" class="w-8 h-8 rounded-lg object-cover ring-2 ring-brand-500/30">
+                    <div x-show="!user.avatar" class="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white text-xs ring-2 ring-brand-500/30">
+                        <i class="fa-solid fa-user"></i>
+                    </div>
                     <div class="text-left overflow-hidden transition-opacity duration-200" :class="sidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 hidden'">
-                        <p class="text-xs font-semibold text-slate-900 dark:text-white truncate">Alex Morgan</p>
-                        <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate">Admin Lead</p>
+                        <p class="text-xs font-semibold text-slate-900 dark:text-white truncate" x-text="user.name || 'Account'"></p>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate" x-text="user.role || ''"></p>
                     </div>
                 </button>
 
@@ -463,7 +466,7 @@
                 <div class="glass-panel p-6 rounded-2xl relative overflow-hidden bg-gradient-to-r from-brand-600/10 via-purple-600/5 to-transparent">
                     <div class="max-w-xl">
                         <span class="text-[10px] uppercase font-bold tracking-wider text-brand-500 bg-brand-500/10 px-2.5 py-1 rounded-full">Onboarding Wizard</span>
-                        <h2 class="text-lg font-bold text-slate-900 dark:text-white mt-2">Welcome to OlioCMS, Alex!</h2>
+                        <h2 class="text-lg font-bold text-slate-900 dark:text-white mt-2">Welcome to OlioCMS<span x-show="user.name" x-text="', ' + user.name.split(' ')[0] + '!'"></span><span x-show="!user.name">!</span></h2>
                         <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">Complete your store setup checklist below to initialize your GraphQL & REST API endpoints for product syncing.</p>
                     </div>
                 </div>
@@ -970,7 +973,9 @@
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Parent Brand</label>
                             <select x-model="newBrand.parent" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
                                 <option value="None">None (Root Brand)</option>
-                                <option value="Apex Industries">Apex Industries</option>
+                                <template x-for="brand in brandsList" :key="brand.id">
+                                    <option :value="brand.name" x-text="brand.name"></option>
+                                </template>
                             </select>
                         </div>
                         <div>
@@ -1042,7 +1047,9 @@
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Parent Category</label>
                             <select x-model="newCategory.parent" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
                                 <option value="None">None (Root Level)</option>
-                                <option value="Electronics">Electronics</option>
+                                <template x-for="cat in categoriesList" :key="cat.id">
+                                    <option :value="cat.name" x-text="cat.name"></option>
+                                </template>
                             </select>
                         </div>
                         <div>
@@ -1161,26 +1168,29 @@
             <!-- VIEW: PROFILE SETTINGS -->
             <div x-show="activeView === 'profile'" x-cloak class="max-w-xl mx-auto glass-panel p-6 rounded-2xl space-y-5">
                 <div class="flex items-center gap-4 pb-4 border-b border-slate-200/40 dark:border-slate-800/40">
-                    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150" class="w-16 h-16 rounded-2xl object-cover ring-4 ring-brand-500/20">
+                    <img x-show="user.avatar" :src="user.avatar" class="w-16 h-16 rounded-2xl object-cover ring-4 ring-brand-500/20">
+                    <div x-show="!user.avatar" class="w-16 h-16 rounded-2xl bg-brand-500 flex items-center justify-center text-white text-xl ring-4 ring-brand-500/20">
+                        <i class="fa-solid fa-user"></i>
+                    </div>
                     <div>
-                        <h2 class="text-base font-bold text-slate-900 dark:text-white">Alex Morgan</h2>
-                        <p class="text-xs text-slate-500">Master CMS Administrator</p>
+                        <h2 class="text-base font-bold text-slate-900 dark:text-white" x-text="user.name || 'Your profile'"></h2>
+                        <p class="text-xs text-slate-500" x-text="user.role || ''"></p>
                     </div>
                 </div>
 
                 <div class="space-y-3">
                     <div>
                         <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
-                        <input type="text" value="Alex Morgan" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        <input type="text" x-model="user.name" placeholder="Full name" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Email Address</label>
-                        <input type="email" value="alex.morgan@oliocms.io" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+                        <input type="email" x-model="user.email" placeholder="you@example.com" class="w-full px-3 py-2 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Headless API Endpoint Key</label>
                         <div class="flex gap-2">
-                            <input type="text" readonly value="olio_live_9921a881bc334ef" class="flex-1 px-3 py-2 rounded-xl text-xs font-mono glass-card border border-slate-200 dark:border-slate-800 text-slate-500">
+                            <input type="text" readonly x-model="user.apiKey" placeholder="No API key yet" class="flex-1 px-3 py-2 rounded-xl text-xs font-mono glass-card border border-slate-200 dark:border-slate-800 text-slate-500">
                             <button @click="showToast('API Key copied!', 'success')" class="px-3 py-2 rounded-xl bg-brand-500 text-white text-xs font-medium">Copy</button>
                         </div>
                     </div>
@@ -1242,9 +1252,17 @@
 
                 // Auth Form State
                 authForm: {
-                    email: 'admin@oliocms.io',
+                    email: '',
                     password: '',
                     confirmPassword: ''
+                },
+
+                user: {
+                    name: '',
+                    email: '',
+                    role: '',
+                    avatar: '',
+                    apiKey: ''
                 },
 
                 // Checklist Onboarding Tracker
@@ -1261,55 +1279,30 @@
                 mediaFilter: 'all',
                 productSearch: '',
 
-                // Datasets
-                mediaList: [
-                    { id: 1, name: 'minimal-headphones.jpg', url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=300', size: '1.2 MB', format: 'jpg' },
-                    { id: 2, name: 'leather-watch.jpg', url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=300', size: '850 KB', format: 'jpg' },
-                    { id: 3, name: 'smart-speaker.jpg', url: 'https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=300', size: '2.1 MB', format: 'jpg' },
-                    { id: 4, name: 'wireless-mouse.jpg', url: 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&q=80&w=300', size: '640 KB', format: 'jpg' },
-                    { id: 5, name: 'modern-backpack.jpg', url: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=300', size: '1.8 MB', format: 'jpg' },
-                    { id: 6, name: 'ceramic-cup.jpg', url: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=300', size: '920 KB', format: 'jpg' }
-                ],
-
-                productsList: [
-                    { id: 1, name: 'Minimalist Leather Backpack', category: 'Accessories', price: '189.00', sku: 'OLIO-BP-001', stockStatus: 'In Stock', type: 'Simple', image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=200' },
-                    { id: 2, name: 'Studio Wireless Headphones', category: 'Electronics', price: '249.00', sku: 'OLIO-HP-002', stockStatus: 'In Stock', type: 'Simple', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=200' },
-                    { id: 3, name: 'Classic Analog Timepiece', category: 'Apparel', price: '129.00', sku: 'OLIO-WT-003', stockStatus: 'Out of Stock', type: 'Variable', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=200' }
-                ],
-
-                brandsList: [
-                    { id: 1, name: 'Lumina Audio', slug: 'lumina-audio', parent: 'None', thumb: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=100' },
-                    { id: 2, name: 'Apex Gear', slug: 'apex-gear', parent: 'None', thumb: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=100' }
-                ],
-
-                categoriesList: [
-                    { id: 1, name: 'Electronics', slug: 'electronics', parent: 'None', thumb: 'https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=100' },
-                    { id: 2, name: 'Accessories', slug: 'accessories', parent: 'None', thumb: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=100' },
-                    { id: 3, name: 'Apparel', slug: 'apparel', parent: 'None', thumb: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=100' }
-                ],
-
-                tagsList: [
-                    { id: 1, name: 'Featured Product', slug: 'featured-product', thumb: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=100' },
-                    { id: 2, name: 'Winter Sale', slug: 'winter-sale', thumb: 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&q=80&w=100' }
-                ],
+                // Datasets (start empty — no seeded/static records)
+                mediaList: [],
+                productsList: [],
+                brandsList: [],
+                categoriesList: [],
+                tagsList: [],
 
                 // Form Models
                 newProduct: {
                     name: '',
                     shortDesc: '',
                     description: '',
-                    category: 'Electronics',
+                    category: '',
                     type: 'Simple',
                     regularPrice: '',
                     price: '',
                     sku: '',
                     stockStatus: 'In Stock',
-                    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=200'
+                    image: ''
                 },
 
-                newBrand: { name: '', slug: '', parent: 'None', description: '', thumb: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=100' },
-                newCategory: { name: '', slug: '', parent: 'None', description: '', thumb: 'https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=100' },
-                newTag: { name: '', slug: '', description: '', thumb: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=100' },
+                newBrand: { name: '', slug: '', parent: 'None', description: '', thumb: '' },
+                newCategory: { name: '', slug: '', parent: 'None', description: '', thumb: '' },
+                newTag: { name: '', slug: '', description: '', thumb: '' },
                 newMedia: { name: '', url: '' },
 
                 // Calculated Progress
@@ -1337,11 +1330,25 @@
                         this.showToast('Passwords do not match!', 'error');
                         return;
                     }
+                    this.user = {
+                        name: this.authForm.email.split('@')[0],
+                        email: this.authForm.email,
+                        role: '',
+                        avatar: '',
+                        apiKey: ''
+                    };
                     this.isLoggedIn = true;
                     this.showToast('Welcome to OlioCMS! Your account was registered.', 'success');
                 },
 
                 handleLogin() {
+                    this.user = {
+                        name: this.authForm.email ? this.authForm.email.split('@')[0] : '',
+                        email: this.authForm.email,
+                        role: '',
+                        avatar: '',
+                        apiKey: ''
+                    };
                     this.isLoggedIn = true;
                     this.showToast('Signed in successfully!', 'success');
                 },
@@ -1349,6 +1356,8 @@
                 handleLogout() {
                     this.isLoggedIn = false;
                     this.authView = 'login';
+                    this.user = { name: '', email: '', role: '', avatar: '', apiKey: '' };
+                    this.authForm = { email: '', password: '', confirmPassword: '' };
                     this.showToast('Logged out of OlioCMS', 'info');
                 },
 
@@ -1399,7 +1408,7 @@
                     if (!this.newBrand.name) return;
                     this.brandsList.push({ id: Date.now(), ...this.newBrand });
                     this.checklist.brands = true;
-                    this.newBrand = { name: '', slug: '', parent: 'None', description: '', thumb: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=100' };
+                    this.newBrand = { name: '', slug: '', parent: 'None', description: '', thumb: '' };
                     this.showToast('Brand added successfully', 'success');
                 },
 
@@ -1412,7 +1421,7 @@
                     if (!this.newCategory.name) return;
                     this.categoriesList.push({ id: Date.now(), ...this.newCategory });
                     this.checklist.categories = true;
-                    this.newCategory = { name: '', slug: '', parent: 'None', description: '', thumb: 'https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=100' };
+                    this.newCategory = { name: '', slug: '', parent: 'None', description: '', thumb: '' };
                     this.showToast('Category added successfully', 'success');
                 },
 
@@ -1425,7 +1434,7 @@
                     if (!this.newTag.name) return;
                     this.tagsList.push({ id: Date.now(), ...this.newTag });
                     this.checklist.tags = true;
-                    this.newTag = { name: '', slug: '', description: '', thumb: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=100' };
+                    this.newTag = { name: '', slug: '', description: '', thumb: '' };
                     this.showToast('Tag added successfully', 'success');
                 },
 

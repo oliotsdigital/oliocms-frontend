@@ -49,15 +49,25 @@ export const ProfileCard: React.FC = () => {
       {/* User Information Card */}
       <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-200/50 dark:border-slate-800/50 shadow-xl space-y-6">
         <div className="flex items-center gap-4 pb-4 border-b border-slate-200/40 dark:border-slate-800/40">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={profile.profile.avatar}
-            alt={profile.profile.name}
-            className="w-16 h-16 rounded-2xl object-cover ring-4 ring-brand-500/20 shadow-lg"
-          />
+          {profile.profile.avatar ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={profile.profile.avatar}
+              alt={profile.profile.name || "Profile"}
+              className="w-16 h-16 rounded-2xl object-cover ring-4 ring-brand-500/20 shadow-lg"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-2xl bg-brand-500 flex items-center justify-center text-white text-xl ring-4 ring-brand-500/20 shadow-lg">
+              <i className="fa-solid fa-user"></i>
+            </div>
+          )}
           <div>
-            <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">{profile.profile.name}</h2>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{profile.profile.role}</p>
+            <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
+              {profile.profile.name || "Your profile"}
+            </h2>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              {profile.profile.role}
+            </p>
           </div>
         </div>
 
@@ -69,6 +79,7 @@ export const ProfileCard: React.FC = () => {
             <input
               type="text"
               value={profile.profile.name}
+              placeholder="Full name"
               onChange={(e) => profile.updateProfileFields({ name: e.target.value })}
               className="w-full px-3.5 py-2.5 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white"
             />
@@ -81,6 +92,7 @@ export const ProfileCard: React.FC = () => {
             <input
               type="email"
               value={profile.profile.email}
+              placeholder="you@example.com"
               onChange={(e) => profile.updateProfileFields({ email: e.target.value })}
               className="w-full px-3.5 py-2.5 rounded-xl text-xs glass-card border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white"
             />
@@ -95,6 +107,7 @@ export const ProfileCard: React.FC = () => {
                 type="text"
                 readOnly
                 value={profile.profile.apiKey}
+                placeholder="No API key yet"
                 className="flex-1 px-3 py-2.5 rounded-xl text-xs font-mono glass-card border border-slate-200 dark:border-slate-800 text-slate-500"
               />
               <button

@@ -12,7 +12,7 @@ export const DashboardContent: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
-      <WelcomeBanner userName={auth.user?.name || "Alex"} />
+      <WelcomeBanner userName={auth.user?.name} />
 
       <SetupChecklist
         checklist={checklist.checklist}

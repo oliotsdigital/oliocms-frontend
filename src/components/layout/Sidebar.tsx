@@ -177,24 +177,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isFirstWebsite
           className="w-full flex items-center gap-3 p-2 rounded-xl glass-card hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition ring-1 ring-brand-500/20 shadow-sm"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={
-              user?.avatar ||
-              "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150"
-            }
-            alt="User Profile"
-            className="w-8 h-8 rounded-lg object-cover ring-2 ring-brand-500/50"
-          />
+          {user?.avatar ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={user.avatar}
+              alt="User Profile"
+              className="w-8 h-8 rounded-lg object-cover ring-2 ring-brand-500/50"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white text-xs ring-2 ring-brand-500/50">
+              <i className="fa-solid fa-user"></i>
+            </div>
+          )}
           <div
             className={`text-left overflow-hidden transition-opacity duration-200 ${
               sidebarExpanded ? "opacity-100" : "opacity-0 w-0 hidden"
             }`}
           >
             <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
-              {user?.name || "Alex Morgan"}
+              {user?.name || "Account"}
             </p>
             <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-              {user?.role || "Admin Lead"}
+              {user?.role || ""}
             </p>
           </div>
         </button>

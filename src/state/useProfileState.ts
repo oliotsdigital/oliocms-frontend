@@ -2,23 +2,35 @@
 
 import { useState, useEffect } from "react";
 import { UserProfile } from "@/models/profile.model";
+import { UserSession } from "@/models/auth.model";
 import { fetchProfileApi, updateProfileApi } from "@/api/profile.api";
+
+const EMPTY_PROFILE: UserProfile = {
+  name: "",
+  email: "",
+  role: "",
+  avatar: "",
+  apiKey: "",
+};
 
 export function useProfileState(
   showToast?: (msg: string, type?: "success" | "info" | "error") => void,
-  onProfileUpdated?: () => void
+  onProfileUpdated?: () => void,
+  session?: UserSession | null
 ) {
-  const [profile, setProfile] = useState<UserProfile>({
-    name: "Alex Morgan",
-    email: "alex.morgan@oliocms.io",
-    role: "Master CMS Administrator",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150",
-    apiKey: "olio_live_9921a881bc334ef",
-  });
+  const [profile, setProfile] = useState<UserProfile>(EMPTY_PROFILE);
 
   useEffect(() => {
-    fetchProfileApi().then((data) => setProfile(data));
-  }, []);
+    fetchProfileApi().then((data) => {
+      setProfile({
+        name: session?.name || data.name,
+        email: session?.email || data.email,
+        role: session?.role || data.role,
+        avatar: session?.avatar || data.avatar,
+        apiKey: session?.apiKey || data.apiKey,
+      });
+    });
+  }, [session]);
 
   const updateProfileFields = (fields: Partial<UserProfile>) => {
     setProfile((prev) => ({ ...prev, ...fields }));
@@ -32,6 +44,10 @@ export function useProfileState(
   };
 
   const copyApiKey = () => {
+    if (!profile.apiKey) {
+      if (showToast) showToast("No API key available", "error");
+      return;
+    }
     if (navigator.clipboard) {
       navigator.clipboard.writeText(profile.apiKey);
     }

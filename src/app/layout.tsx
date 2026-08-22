@@ -5,6 +5,10 @@ import { OlioProvider } from "@/state/OlioProvider";
 export const metadata: Metadata = {
   title: "OlioCMS - Modern Headless Content Management System",
   description: "Manage your headless store ecosystem with sleek glassmorphism design.",
+  icons: {
+    icon: "/logos/olioverse_icon.png",
+    apple: "/logos/olioverse_icon.png",
+  },
 };
 
 export default function RootLayout({
@@ -15,6 +19,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=localStorage.getItem("oliocms_theme_dark");if(s==="true"||(s===null&&window.matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark");}catch(e){}})();`,
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}

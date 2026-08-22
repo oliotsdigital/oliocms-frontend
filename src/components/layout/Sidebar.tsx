@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserSession } from "@/models/auth.model";
 import { useOlio } from "@/state/OlioProvider";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 
 interface SidebarProps {
   user: UserSession | null;
@@ -14,7 +15,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isFirstWebsiteModalOpen }) => {
   const pathname = usePathname();
-  const { theme, collectionsState } = useOlio();
+  const { collectionsState } = useOlio();
   const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(false);
   const [productsHover, setProductsHover] = useState<boolean>(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState<boolean>(false);
@@ -40,48 +41,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isFirstWebsite
           isFirstWebsiteModalOpen ? "pointer-events-none opacity-60" : ""
         }`}
       >
-        <Link href="/dashboard" className="w-full flex items-center justify-center">
-          {sidebarExpanded ? (
-            /* Expanded Logo */
-            <div className="w-full flex items-center justify-center px-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={theme.isDarkMode ? "/logos/oliocms_logo_dark.png" : "/logos/oliocms_logo_light.png"}
-                alt="OlioCMS Logo"
-                className="h-8 md:h-9 w-auto max-w-[180px] object-contain object-center mx-auto"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                  const parent = e.currentTarget.parentElement;
-                  if (parent && !parent.querySelector(".logo-fallback")) {
-                    const fallback = document.createElement("div");
-                    fallback.className =
-                      "logo-fallback flex items-center justify-center gap-2 font-bold text-sm text-slate-900 dark:text-white mx-auto";
-                    fallback.innerHTML = `<div class="w-8 h-8 rounded-xl bg-brand-500 flex items-center justify-center text-white"><i class="fa-solid fa-cubes"></i></div> <span>Olio<span class="text-brand-500">CMS</span></span>`;
-                    parent.appendChild(fallback);
-                  }
-                }}
-              />
-            </div>
-          ) : (
-            /* Collapsed Icon */
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src="/logos/olioverse_icon.png"
-              alt="Olioverse Icon"
-              className="w-8 h-8 md:w-9 md:h-9 object-contain mx-auto"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-                const parent = e.currentTarget.parentElement;
-                if (parent && !parent.querySelector(".icon-fallback")) {
-                  const fallback = document.createElement("div");
-                  fallback.className =
-                    "icon-fallback w-8 h-8 rounded-xl bg-brand-500 flex items-center justify-center text-white font-bold text-xs mx-auto";
-                  fallback.innerHTML = `<i class="fa-solid fa-cubes"></i>`;
-                  parent.appendChild(fallback);
-                }
-              }}
-            />
-          )}
+        <Link href="/dashboard" className="relative w-full h-9 flex items-center justify-center">
+          <div
+            className={`w-full flex items-center justify-center px-2 ${
+              sidebarExpanded ? "" : "invisible absolute pointer-events-none"
+            }`}
+          >
+            <BrandLogo className="h-8 md:h-9 max-w-[180px] mx-auto" />
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logos/olioverse_icon.png"
+            alt="Olioverse Icon"
+            className={`w-8 h-8 md:w-9 md:h-9 object-contain mx-auto ${sidebarExpanded ? "invisible absolute" : ""}`}
+          />
         </Link>
       </div>
 

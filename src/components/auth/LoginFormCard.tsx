@@ -2,6 +2,7 @@
 
 import React from "react";
 import { AuthForm } from "@/models/auth.model";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 
 interface LoginFormCardProps {
   authForm: AuthForm;
@@ -45,22 +46,7 @@ export const LoginFormCard: React.FC<LoginFormCardProps> = ({
       <div className="glass-panel p-6 md:p-8 rounded-2xl shadow-2xl relative overflow-hidden">
         {/* Centered Logo Header */}
         <div className="flex flex-col items-center justify-center text-center mb-6">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={isDarkMode ? "/logos/oliocms_logo_dark.png" : "/logos/oliocms_logo_light.png"}
-            alt="OlioCMS Logo"
-            className="h-16 md:h-18 w-auto max-w-full object-contain mb-2"
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-              const parent = e.currentTarget.parentElement;
-              if (parent && !parent.querySelector(".auth-logo-fallback")) {
-                const fallback = document.createElement("div");
-                fallback.className = "auth-logo-fallback flex items-center justify-center gap-2.5 mb-2";
-                fallback.innerHTML = `<div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-brand-600 to-brand-400 flex items-center justify-center shadow-lg shadow-brand-500/30 text-white font-bold text-xl"><i class="fa-solid fa-cubes"></i></div><span class="font-bold text-2xl tracking-tight text-slate-900 dark:text-white">Olio<span class="text-brand-500">CMS</span></span>`;
-                parent.prepend(fallback);
-              }
-            }}
-          />
+          <BrandLogo className="h-16 md:h-[4.5rem] max-w-full mb-2" />
         </div>
 
         <div className="mb-6 text-center">

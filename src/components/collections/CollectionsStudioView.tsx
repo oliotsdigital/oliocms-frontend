@@ -140,13 +140,41 @@ export const CollectionsStudioView: React.FC = () => {
     }
   }, [collections, urlId]);
 
+// Helper to identify mandatory system fields
+const isMandatoryField = (fieldName: string): boolean => {
+  const lower = fieldName.trim().toLowerCase();
+  return lower === "title" || lower === "media";
+};
+
   // Sync edit state when user selects a collection from sidebar
   const handleSelectCollection = (col: CollectionSchema) => {
     setSelectedId(col.id);
     setEditingName(col.name);
     setEditingIcon(col.icon || "fa-cube");
     setEditingFeaturedImage(col.featured_image || "");
-    setEditingFields(JSON.parse(JSON.stringify(col.schema_definition || [])));
+
+    const fields: FieldDefinition[] = JSON.parse(JSON.stringify(col.schema_definition || []));
+    const hasTitle = fields.some((f) => f.name.trim().toLowerCase() === "title");
+    const hasMedia = fields.some((f) => f.name.trim().toLowerCase() === "media");
+    if (!hasTitle) {
+      fields.unshift({
+        name: "title",
+        label: "Title",
+        type: "string",
+        validation: { required: true, unique: false },
+      });
+    }
+    if (!hasMedia) {
+      const titlePos = fields.findIndex((f) => f.name.trim().toLowerCase() === "title");
+      const insertPos = titlePos !== -1 ? titlePos + 1 : 1;
+      fields.splice(insertPos, 0, {
+        name: "media",
+        label: "Media",
+        type: "media",
+        validation: { required: false, unique: false },
+      });
+    }
+    setEditingFields(fields);
   };
 
   const handleDeleteCollection = async (e: React.MouseEvent, id: string, name: string) => {
@@ -176,12 +204,35 @@ export const CollectionsStudioView: React.FC = () => {
       return;
     }
 
+    // Ensure mandatory title and media are preserved
+    const fieldsToSave = [...editingFields];
+    const hasTitle = fieldsToSave.some((f) => f.name.trim().toLowerCase() === "title");
+    const hasMedia = fieldsToSave.some((f) => f.name.trim().toLowerCase() === "media");
+    if (!hasTitle) {
+      fieldsToSave.unshift({
+        name: "title",
+        label: "Title",
+        type: "string",
+        validation: { required: true, unique: false },
+      });
+    }
+    if (!hasMedia) {
+      const titlePos = fieldsToSave.findIndex((f) => f.name.trim().toLowerCase() === "title");
+      const insertPos = titlePos !== -1 ? titlePos + 1 : 1;
+      fieldsToSave.splice(insertPos, 0, {
+        name: "media",
+        label: "Media",
+        type: "media",
+        validation: { required: false, unique: false },
+      });
+    }
+
     setIsSaving(true);
     const res = await updateCollectionSchemaApi(selectedId, {
       name: editingName.trim(),
       icon: editingIcon,
       featured_image: editingFeaturedImage,
-      schema_definition: editingFields,
+      schema_definition: fieldsToSave,
     });
     setIsSaving(false);
 
@@ -214,6 +265,11 @@ export const CollectionsStudioView: React.FC = () => {
   };
 
   const handleRemoveProperty = (index: number) => {
+    const target = editingFields[index];
+    if (target && isMandatoryField(target.name)) {
+      if (toast) toast.showToast(`"${target.label || target.name}" is a mandatory field and cannot be removed`, "error");
+      return;
+    }
     if (editingFields.length <= 1) {
       if (toast) toast.showToast("A schema must contain at least one field definition", "error");
       return;
@@ -222,6 +278,11 @@ export const CollectionsStudioView: React.FC = () => {
   };
 
   const handleFieldChange = (index: number, key: keyof FieldDefinition, value: any) => {
+    const target = editingFields[index];
+    if (target && isMandatoryField(target.name)) {
+      // Key, label, and type cannot be modified for mandatory fields
+      return;
+    }
     const updated = [...editingFields];
     if (key === "name") {
       updated[index].name = value.toLowerCase().replace(/[^a-z0-9_]/g, "");
@@ -420,103 +481,142 @@ export const CollectionsStudioView: React.FC = () => {
 
                 {/* Property Definition Cards List */}
                 <div className="space-y-3 max-h-[550px] overflow-y-auto pr-1">
-                  {editingFields.map((field, idx) => (
-                    <div
-                      key={idx}
-                      className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800/80 hover:border-brand-500/40 transition-all flex flex-col md:flex-row md:items-center gap-4"
-                    >
-                      {/* Property Key */}
-                      <div className="flex-1">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                          Key (snake_case)
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={field.name}
-                          onChange={(e) => handleFieldChange(idx, "name", e.target.value)}
-                          placeholder="property_key"
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        />
-                      </div>
+                  {editingFields.map((field, idx) => {
+                    const isMandatory = isMandatoryField(field.name);
 
-                      {/* Display Label */}
-                      <div className="flex-1">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                          Display Label
-                        </label>
-                        <input
-                          type="text"
-                          value={field.label || ""}
-                          onChange={(e) => handleFieldChange(idx, "label", e.target.value)}
-                          placeholder="Display Label"
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        />
-                      </div>
-
-                      {/* Property Type */}
-                      <div className="w-full md:w-44">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                          Property Type
-                        </label>
-                        <select
-                          value={field.type}
-                          onChange={(e) => handleFieldChange(idx, "type", e.target.value as FieldType)}
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        >
-                          <option value="string">Text (String)</option>
-                          <option value="number">Number</option>
-                          <option value="boolean">Boolean (Switch)</option>
-                          <option value="richtext">Rich text (Blocks)</option>
-                          <option value="markdown">Rich text (Markdown)</option>
-                          <option value="json">JSON</option>
-                          <option value="email">Email</option>
-                          <option value="date">Date</option>
-                          <option value="password">Password</option>
-                          <option value="media">Media</option>
-                          <option value="enumeration">Enumeration</option>
-                          <option value="relation">Relation ID</option>
-                          <option value="uid">UID</option>
-                          <option value="component">Component</option>
-                          <option value="dynamiczone">Dynamic zone</option>
-                        </select>
-                      </div>
-
-                      {/* Validation Toggles & Delete */}
-                      <div className="flex items-center justify-between md:justify-end gap-4 pt-2 md:pt-5 border-t md:border-t-0 border-slate-200 dark:border-slate-800">
-                        <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-4 rounded-2xl border transition-all flex flex-col md:flex-row md:items-center gap-4 ${
+                          isMandatory
+                            ? "bg-slate-50/90 dark:bg-slate-800/60 border-brand-500/30"
+                            : "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800/80 hover:border-brand-500/40"
+                        }`}
+                      >
+                        {/* Property Key */}
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              Key (snake_case)
+                            </label>
+                            {isMandatory && (
+                              <span className="px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-500 border border-brand-500/20 text-[9px] font-bold inline-flex items-center gap-1">
+                                <i className="fa-solid fa-lock text-[8px]"></i> Mandatory
+                              </span>
+                            )}
+                          </div>
                           <input
-                            type="checkbox"
-                            checked={!!field.validation?.required}
-                            onChange={() => handleValidationToggle(idx, "required")}
-                            className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                            type="text"
+                            required
+                            disabled={isMandatory}
+                            value={field.name}
+                            onChange={(e) => handleFieldChange(idx, "name", e.target.value)}
+                            placeholder="property_key"
+                            className={`w-full px-3 py-2 rounded-xl border text-xs font-mono focus:outline-none transition ${
+                              isMandatory
+                                ? "bg-slate-100 dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                            }`}
                           />
-                          Required
-                        </label>
+                        </div>
 
-                        <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+                        {/* Display Label */}
+                        <div className="flex-1">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Display Label
+                          </label>
                           <input
-                            type="checkbox"
-                            checked={!!field.validation?.unique}
-                            onChange={() => handleValidationToggle(idx, "unique")}
-                            className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                            type="text"
+                            disabled={isMandatory}
+                            value={field.label || ""}
+                            onChange={(e) => handleFieldChange(idx, "label", e.target.value)}
+                            placeholder="Display Label"
+                            className={`w-full px-3 py-2 rounded-xl border text-xs font-medium focus:outline-none transition ${
+                              isMandatory
+                                ? "bg-slate-100 dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                            }`}
                           />
-                          Unique
-                        </label>
+                        </div>
 
-                        {editingFields.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveProperty(idx)}
-                            className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition"
-                            title="Remove Property"
+                        {/* Property Type */}
+                        <div className="w-full md:w-44">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Property Type
+                          </label>
+                          <select
+                            disabled={isMandatory}
+                            value={field.type}
+                            onChange={(e) => handleFieldChange(idx, "type", e.target.value as FieldType)}
+                            className={`w-full px-3 py-2 rounded-xl border text-xs font-medium focus:outline-none transition ${
+                              isMandatory
+                                ? "bg-slate-100 dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                            }`}
                           >
-                            <i className="fa-solid fa-trash-can text-xs"></i>
-                          </button>
-                        )}
+                            <option value="string">Text (String)</option>
+                            <option value="number">Number</option>
+                            <option value="boolean">Boolean (Switch)</option>
+                            <option value="richtext">Rich text (Blocks)</option>
+                            <option value="markdown">Rich text (Markdown)</option>
+                            <option value="json">JSON</option>
+                            <option value="email">Email</option>
+                            <option value="date">Date</option>
+                            <option value="password">Password</option>
+                            <option value="media">Media</option>
+                            <option value="enumeration">Enumeration</option>
+                            <option value="relation">Relation ID</option>
+                            <option value="uid">UID</option>
+                            <option value="component">Component</option>
+                            <option value="dynamiczone">Dynamic zone</option>
+                          </select>
+                        </div>
+
+                        {/* Validation Toggles (Always Editable) & Delete */}
+                        <div className="flex items-center justify-between md:justify-end gap-4 pt-2 md:pt-5 border-t md:border-t-0 border-slate-200 dark:border-slate-800">
+                          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+                            <input
+                              type="checkbox"
+                              checked={!!field.validation?.required}
+                              onChange={() => handleValidationToggle(idx, "required")}
+                              className="rounded border-slate-300 text-brand-500 focus:ring-brand-500 cursor-pointer"
+                            />
+                            Required
+                          </label>
+
+                          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+                            <input
+                              type="checkbox"
+                              checked={!!field.validation?.unique}
+                              onChange={() => handleValidationToggle(idx, "unique")}
+                              className="rounded border-slate-300 text-brand-500 focus:ring-brand-500 cursor-pointer"
+                            />
+                            Unique
+                          </label>
+
+                          {isMandatory ? (
+                            <span
+                              className="p-2 text-slate-400 dark:text-slate-500 text-xs flex items-center justify-center cursor-not-allowed"
+                              title="Mandatory fields cannot be deleted"
+                            >
+                              <i className="fa-solid fa-lock text-xs"></i>
+                            </span>
+                          ) : (
+                            editingFields.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveProperty(idx)}
+                                className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition"
+                                title="Remove Property"
+                              >
+                                <i className="fa-solid fa-trash-can text-xs"></i>
+                              </button>
+                            )
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { CollectionSchema } from "@/models/collection.model";
 import { createCollectionRecordApi } from "@/api/collection.api";
+import { MediaFieldInput } from "./MediaFieldInput";
 
 interface DynamicFormModalProps {
   isOpen: boolean;
@@ -30,7 +31,7 @@ export const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
     schema.schema_definition.forEach((field) => {
       const isRequired = field.validation?.required;
 
-      if (field.type === "string" || field.type === "relation") {
+      if (field.type === "string" || field.type === "relation" || field.type === "media") {
         let strSchema = z.string();
         if (isRequired) {
           shape[field.name] = strSchema.min(1, `${field.label || field.name} is required.`);
@@ -87,6 +88,8 @@ export const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
         cleanedData[f.name] = val !== "" && val !== null && !isNaN(Number(val)) ? Number(val) : null;
       } else if (f.type === "boolean") {
         cleanedData[f.name] = Boolean(val);
+      } else if (f.type === "media") {
+        cleanedData[f.name] = val && typeof val === "string" && val.trim() ? val.trim() : null;
       } else {
         cleanedData[f.name] = val !== undefined ? val : null;
       }
@@ -190,6 +193,20 @@ export const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
                         </div>
                         <span>{value ? "Active / True" : "Inactive / False"}</span>
                       </button>
+                    )}
+                  />
+                ) : field.type === "media" ? (
+                  <Controller
+                    name={field.name}
+                    control={control}
+                    render={({ field: { value, onChange } }) => (
+                      <MediaFieldInput
+                        field={field}
+                        value={value}
+                        onChange={onChange}
+                        projectId={schema.project_id}
+                        disabled={submitting}
+                      />
                     )}
                   />
                 ) : null}

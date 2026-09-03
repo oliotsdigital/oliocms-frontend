@@ -8,6 +8,7 @@ import { CollectionSchema } from "@/models/collection.model";
 import { fetchCollectionSchemaApi, createCollectionRecordApi } from "@/api/collection.api";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useOlio } from "@/state/OlioProvider";
+import { MediaFieldInput } from "./MediaFieldInput";
 
 interface AddRecordViewProps {
   collectionId: string;
@@ -60,6 +61,8 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
         cleanedData[f.name] = val !== "" && val !== null && !isNaN(Number(val)) ? Number(val) : null;
       } else if (f.type === "boolean") {
         cleanedData[f.name] = Boolean(val);
+      } else if (f.type === "media") {
+        cleanedData[f.name] = val && typeof val === "string" && val.trim() ? val.trim() : null;
       } else {
         cleanedData[f.name] = val !== undefined ? val : null;
       }
@@ -225,6 +228,23 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
                                 </div>
                                 <span>{value ? "Enabled (True)" : "Disabled (False)"}</span>
                               </button>
+                            )}
+                          />
+                        ) : field.type === "media" ? (
+                          <Controller
+                            name={field.name}
+                            control={control}
+                            rules={{
+                              required: field.validation?.required ? `${field.label || field.name} is required` : false,
+                            }}
+                            render={({ field: { value, onChange } }) => (
+                              <MediaFieldInput
+                                field={field}
+                                value={value}
+                                onChange={onChange}
+                                projectId={schema.project_id}
+                                disabled={submitting}
+                              />
                             )}
                           />
                         ) : (

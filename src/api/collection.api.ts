@@ -260,6 +260,39 @@ export async function createCollectionRecordApi(
   }
 }
 
+export async function updateCollectionRecordApi(
+  collectionId: string,
+  recordId: string,
+  data: Record<string, any>
+): Promise<{ record?: CollectionRecord; error?: string }> {
+  const selectedProjId = resolveProjectId();
+  if (!selectedProjId) {
+    return { error: "Select a website before updating a record." };
+  }
+  logger.info(`Updating record ${recordId} for collection ${collectionId}`, data);
+  try {
+    const res = await apiFetch(`${API_BASE_URL}/collections/${collectionId}/records/${recordId}`, {
+      method: "PUT",
+      headers: getCollectionHeaders(selectedProjId),
+      body: JSON.stringify({ data }),
+    });
+    const resJson = await res.json();
+    if (res.ok) {
+      logger.success("Record updated successfully on backend API.", resJson);
+      return { record: resJson };
+    } else {
+      const errMsg =
+        typeof resJson.detail === "string"
+          ? resJson.detail
+          : resJson.error || resJson.message || "Record validation failed";
+      return { error: errMsg };
+    }
+  } catch (err: any) {
+    logger.error("Network error updating collection record:", err);
+    return { error: err?.message || "Network error updating collection record" };
+  }
+}
+
 export async function deleteCollectionRecordApi(
   collectionId: string,
   recordId: string

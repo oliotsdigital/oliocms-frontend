@@ -1,14 +1,23 @@
 "use client";
 
-import React, { useState } from "react";
-import { CollectionRecord, CollectionSchema } from "@/models/collection.model";
+import React, { useMemo, useState } from "react";
+import { CollectionRecord, CollectionSchema, FieldDefinition } from "@/models/collection.model";
 import { deleteCollectionRecordApi } from "@/api/collection.api";
+import { resolveMediaUrl } from "@/utils/media";
+import { EditRecordModal } from "./EditRecordModal";
 
 interface DynamicDataTableProps {
   schema: CollectionSchema;
   records: CollectionRecord[];
   onRefresh: () => void;
   onFilterChange?: (filters: Record<string, string>) => void;
+}
+
+interface DisplayColumn {
+  key: string;
+  label: string;
+  field?: FieldDefinition;
+  isVirtualMedia?: boolean;
 }
 
 export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
@@ -18,8 +27,87 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
   onFilterChange,
 }) => {
   const [selectedRecord, setSelectedRecord] = useState<CollectionRecord | null>(null);
+  const [editingRecord, setEditingRecord] = useState<CollectionRecord | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+
+  // Prioritized column ordering:
+  // 1. Media field(s) at first column(s) (or a virtual empty Media column if schema has no media field)
+  // 2. Title field ("title", "name", or field containing title)
+  // 3. Remaining fields in their schema order
+  const displayColumns = useMemo<DisplayColumn[]>(() => {
+    const fields = schema.schema_definition || [];
+
+    // All media fields
+    const mediaFields = fields.filter((f) => f.type === "media");
+
+    // Non-media fields
+    const nonMediaFields = fields.filter((f) => f.type !== "media");
+
+    // Find title/name field
+    const titleIndex = nonMediaFields.findIndex((f) => {
+      const nameLower = f.name.toLowerCase();
+      const labelLower = (f.label || "").toLowerCase();
+      return (
+        nameLower === "title" ||
+        nameLower === "name" ||
+        labelLower === "title" ||
+        labelLower === "name" ||
+        nameLower.includes("title") ||
+        labelLower.includes("title")
+      );
+    });
+
+    let titleField: FieldDefinition | undefined;
+    let otherFields: FieldDefinition[] = [];
+
+    if (titleIndex !== -1) {
+      titleField = nonMediaFields[titleIndex];
+      otherFields = nonMediaFields.filter((_, idx) => idx !== titleIndex);
+    } else {
+      otherFields = nonMediaFields;
+    }
+
+    const cols: DisplayColumn[] = [];
+
+    // Media field(s) at first column(s)
+    if (mediaFields.length > 0) {
+      mediaFields.forEach((f) => {
+        cols.push({
+          key: f.name,
+          label: f.label || f.name,
+          field: f,
+        });
+      });
+    } else {
+      // If media column is not available keep the row value empty
+      cols.push({
+        key: "__virtual_media__",
+        label: "Media",
+        isVirtualMedia: true,
+      });
+    }
+
+    // After media, if there is another media field show that or else Go for Title
+    if (titleField) {
+      cols.push({
+        key: titleField.name,
+        label: titleField.label || titleField.name,
+        field: titleField,
+      });
+    }
+
+    // Remaining fields
+    otherFields.forEach((f) => {
+      cols.push({
+        key: f.name,
+        label: f.label || f.name,
+        field: f,
+      });
+    });
+
+    return cols;
+  }, [schema.schema_definition]);
 
   const handleDelete = async (recordId: string) => {
     if (!confirm("Are you sure you want to delete this record?")) return;
@@ -92,10 +180,9 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-100/70 dark:bg-slate-800/60 border-b border-slate-200/50 dark:border-slate-800/50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                <th className="py-3 px-4">Record ID</th>
-                {schema.schema_definition.map((f) => (
-                  <th key={f.name} className="py-3 px-4">
-                    {f.label || f.name}
+                {displayColumns.map((col) => (
+                  <th key={col.key} className="py-3 px-4">
+                    {col.label}
                   </th>
                 ))}
                 <th className="py-3 px-4">Created At</th>
@@ -110,18 +197,22 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                     key={row.id}
                     className="hover:bg-slate-100/50 dark:hover:bg-slate-800/40 transition"
                   >
-                    {/* ID */}
-                    <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                      {row.id.substring(0, 8)}...
-                    </td>
+                    {/* Columns rendered according to priority ordering */}
+                    {displayColumns.map((col) => {
+                      if (col.isVirtualMedia) {
+                        return (
+                          <td key={col.key} className="py-3 px-4 text-slate-400 italic">
+                            —
+                          </td>
+                        );
+                      }
 
-                    {/* Dynamic Columns */}
-                    {schema.schema_definition.map((f) => {
+                      const f = col.field!;
                       const val = row.data?.[f.name];
 
                       if (val === undefined || val === null || val === "") {
                         return (
-                          <td key={f.name} className="py-3 px-4 text-slate-400 italic">
+                          <td key={col.key} className="py-3 px-4 text-slate-400 italic">
                             —
                           </td>
                         );
@@ -129,7 +220,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
 
                       if (f.type === "boolean") {
                         return (
-                          <td key={f.name} className="py-3 px-4">
+                          <td key={col.key} className="py-3 px-4">
                             <span
                               className={`px-2 py-0.5 rounded-md text-[10px] font-bold inline-flex items-center gap-1 ${
                                 val
@@ -150,15 +241,63 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
 
                       if (f.type === "number") {
                         return (
-                          <td key={f.name} className="py-3 px-4 font-mono text-slate-900 dark:text-white">
+                          <td key={col.key} className="py-3 px-4 font-mono text-slate-900 dark:text-white">
                             {typeof val === "number" ? val.toLocaleString() : val}
+                          </td>
+                        );
+                      }
+
+                      if (f.type === "media") {
+                        const strVal = String(val);
+                        const mediaUrl = resolveMediaUrl(strVal);
+                        const isImg =
+                          strVal.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i) ||
+                          strVal.startsWith("data:image/") ||
+                          strVal.includes("images.unsplash.com");
+
+                        return (
+                          <td key={col.key} className="py-2.5 px-4">
+                            <div className="flex items-center gap-2">
+                              {isImg ? (
+                                <a
+                                  href={mediaUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="group relative w-8 h-8 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 bg-slate-100 dark:bg-slate-800 flex items-center justify-center"
+                                  title="Click to view full media"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={mediaUrl}
+                                    alt={f.label || f.name}
+                                    className="w-full h-full object-cover transition group-hover:scale-110"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = "none";
+                                    }}
+                                  />
+                                </a>
+                              ) : (
+                                <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-500/20">
+                                  <i className="fa-solid fa-file text-xs"></i>
+                                </div>
+                              )}
+                              <a
+                                href={mediaUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono text-[11px] text-slate-600 dark:text-slate-300 hover:text-brand-500 dark:hover:text-brand-400 truncate max-w-[140px]"
+                                title={strVal}
+                              >
+                                {strVal.split("/").pop()}
+                              </a>
+                            </div>
                           </td>
                         );
                       }
 
                       return (
                         <td
-                          key={f.name}
+                          key={col.key}
                           className="py-3 px-4 text-slate-900 dark:text-white max-w-xs truncate"
                           title={String(val)}
                         >
@@ -174,7 +313,14 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
 
                     {/* Actions */}
                     <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setEditingRecord(row)}
+                          className="p-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-brand-500 hover:bg-brand-500/10 transition"
+                          title="Edit Record"
+                        >
+                          <i className="fa-solid fa-pen-to-square text-xs"></i>
+                        </button>
                         <button
                           onClick={() => setSelectedRecord(row)}
                           className="p-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-brand-500 transition"
@@ -197,7 +343,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
               ) : (
                 <tr>
                   <td
-                    colSpan={schema.schema_definition.length + 3}
+                    colSpan={displayColumns.length + 2}
                     className="py-12 text-center text-slate-400"
                   >
                     <i className="fa-solid fa-folder-open text-3xl mb-2 block"></i>
@@ -209,6 +355,17 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Edit Record Modal */}
+      {editingRecord && (
+        <EditRecordModal
+          isOpen={true}
+          onClose={() => setEditingRecord(null)}
+          schema={schema}
+          record={editingRecord}
+          onSuccess={onRefresh}
+        />
+      )}
 
       {/* JSON Inspector Modal Drawer */}
       {selectedRecord && (

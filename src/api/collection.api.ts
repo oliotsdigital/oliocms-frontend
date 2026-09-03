@@ -96,15 +96,24 @@ export async function createCollectionSchemaApi(
       headers: getCollectionHeaders(selectedProjId),
       body: JSON.stringify(fullPayload),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
       logger.success("Collection schema created successfully on API.", data);
       return { collection: data };
     } else {
-      const errMsg =
-        typeof data.detail === "string"
-          ? data.detail
-          : data.error || data.message || "Failed to create collection schema";
+      let errMsg = "Failed to create collection schema";
+      if (Array.isArray(data.details) && data.details.length > 0) {
+        errMsg = data.details
+          .map((d: any) => `${d.location?.filter((x: any) => x !== "body")?.join(".") || "field"}: ${d.message}`)
+          .join(", ");
+      } else if (typeof data.error === "string") {
+        errMsg = data.error;
+      } else if (typeof data.detail === "string") {
+        errMsg = data.detail;
+      } else if (data.message) {
+        errMsg = data.message;
+      }
+      logger.error("Failed to create collection schema:", errMsg, data);
       return { error: errMsg };
     }
   } catch (err: any) {
@@ -128,15 +137,24 @@ export async function updateCollectionSchemaApi(
       headers: getCollectionHeaders(selectedProjId),
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
       logger.success("Collection schema updated successfully on API.", data);
       return { collection: data };
     } else {
-      const errMsg =
-        typeof data.detail === "string"
-          ? data.detail
-          : data.error || data.message || "Failed to update collection schema";
+      let errMsg = "Failed to update collection schema";
+      if (Array.isArray(data.details) && data.details.length > 0) {
+        errMsg = data.details
+          .map((d: any) => `${d.location?.filter((x: any) => x !== "body")?.join(".") || "field"}: ${d.message}`)
+          .join(", ");
+      } else if (typeof data.error === "string") {
+        errMsg = data.error;
+      } else if (typeof data.detail === "string") {
+        errMsg = data.detail;
+      } else if (data.message) {
+        errMsg = data.message;
+      }
+      logger.error("Failed to update collection schema:", errMsg, data);
       return { error: errMsg };
     }
   } catch (err: any) {

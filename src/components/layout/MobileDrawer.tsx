@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useOlio } from "@/state/OlioProvider";
+import { resolveMediaUrl } from "@/utils/media";
 
 interface MobileDrawerProps {
   isOpen: boolean;
@@ -170,7 +171,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                   <div className="w-5 h-5 rounded-md overflow-hidden shrink-0 border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-center bg-slate-100 dark:bg-slate-800">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={col.featured_image}
+                      src={resolveMediaUrl(col.featured_image)}
                       alt={col.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {

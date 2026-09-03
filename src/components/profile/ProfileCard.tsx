@@ -3,15 +3,21 @@
 import React, { useState } from "react";
 import { useOlio } from "@/state/OlioProvider";
 import { changePasswordApi } from "@/api/auth.api";
+import { deleteCurrentUserApi } from "@/api/profile.api";
 
 export const ProfileCard: React.FC = () => {
-  const { profile, toast } = useOlio();
+  const { profile, toast, auth } = useOlio();
 
   // Change Password states
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // Delete User states
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,6 +47,24 @@ export const ProfileCard: React.FC = () => {
       setConfirmPassword("");
     } else {
       if (toast) toast.showToast(res.message || "Failed to update password", "error");
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (deleteConfirmText.trim().toUpperCase() !== "DELETE") {
+      if (toast) toast.showToast("Please type DELETE to confirm account deletion", "error");
+      return;
+    }
+    setIsDeletingUser(true);
+    const res = await deleteCurrentUserApi();
+    setIsDeletingUser(false);
+    if (res.success) {
+      if (toast) toast.showToast(res.message || "Your account has been deleted.", "success");
+      setShowDeleteModal(false);
+      // Immediately log out and redirect
+      await auth.handleLogout();
+    } else {
+      if (toast) toast.showToast(res.message || "Failed to delete account", "error");
     }
   };
 
@@ -211,6 +235,109 @@ export const ProfileCard: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {/* Danger Zone: Delete User Card */}
+      <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-rose-500/30 dark:border-rose-500/25 bg-rose-500/[0.03] dark:bg-rose-950/[0.15] shadow-xl space-y-5">
+        <div className="flex items-center gap-3 pb-4 border-b border-rose-500/20 dark:border-rose-500/20">
+          <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center font-bold text-base">
+            <i className="fa-solid fa-triangle-exclamation"></i>
+          </div>
+          <div>
+            <h3 className="text-base font-extrabold text-rose-600 dark:text-rose-400">
+              Danger Zone
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Irreversible account actions
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+              Delete User Account
+            </h4>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-md leading-relaxed">
+              Permanently delete your profile and all associated database content including dynamic collections, schemas, records, projects, and media storage.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setDeleteConfirmText("");
+              setShowDeleteModal(true);
+            }}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white text-xs font-bold transition-all shadow-lg shadow-rose-500/25 hover:shadow-rose-500/40 hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2 shrink-0"
+          >
+            <i className="fa-solid fa-trash-can text-xs"></i>
+            <span>Delete User</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
+          <div className="glass-panel max-w-md w-full p-6 sm:p-7 rounded-3xl border border-rose-500/30 dark:border-rose-500/30 bg-white dark:bg-slate-900 shadow-2xl space-y-5">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center text-xl shrink-0">
+                <i className="fa-solid fa-triangle-exclamation"></i>
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                  Delete Account & All Data?
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  This action is <strong className="text-rose-500">permanent and irreversible</strong>. All your dynamic collections, records, schemas, and uploaded files in Cloudflare R2 will be immediately erased.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-rose-500/5 dark:bg-rose-950/20 border border-rose-500/20 space-y-2">
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Type <span className="font-mono font-bold text-rose-500">DELETE</span> below to confirm:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Type DELETE"
+                className="w-full px-3 py-2 rounded-xl text-xs font-mono bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-700/60 focus:outline-none focus:ring-2 focus:ring-rose-500 text-slate-900 dark:text-white"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingUser}
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteConfirmText.trim().toUpperCase() !== "DELETE" || isDeletingUser}
+                onClick={handleDeleteUser}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white text-xs font-bold transition shadow-lg shadow-rose-500/25 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-2"
+              >
+                {isDeletingUser ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin text-xs"></i>
+                    <span>Deleting Account...</span>
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-trash-can text-xs"></i>
+                    <span>Permanently Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

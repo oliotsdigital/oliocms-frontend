@@ -9,6 +9,7 @@ import { SchemaBuilderModal, AVAILABLE_ICONS } from "./SchemaBuilderModal";
 import { AddFieldModal } from "./AddFieldModal";
 import { SelectIconModal } from "./SelectIconModal";
 import { useOlio } from "@/state/OlioProvider";
+import { resolveMediaUrl } from "@/utils/media";
 
 interface CollectionItemCardProps {
   col: CollectionSchema;
@@ -40,7 +41,7 @@ const CollectionItemCard: React.FC<CollectionItemCardProps> = ({
         {hasFeaturedImage ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            src={col.featured_image}
+            src={resolveMediaUrl(col.featured_image)}
             alt={col.name}
             className="w-full h-full object-cover"
             onError={() => setImgError(true)}

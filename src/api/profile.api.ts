@@ -45,3 +45,25 @@ export async function updateProfileApi(updated: Partial<UserProfile>): Promise<U
     ...updated,
   };
 }
+
+export async function deleteCurrentUserApi(): Promise<{ success: boolean; message?: string }> {
+  try {
+    const res = await apiFetch(`${API_BASE_URL}/users/me`, {
+      method: "DELETE",
+      headers: getCmsHeaders(),
+    });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { success: true, message: data.message || "User account and all data deleted successfully." };
+    }
+    const errData = await res.json().catch(() => ({}));
+    return {
+      success: false,
+      message: errData.detail || errData.message || `Failed to delete user (Status: ${res.status})`,
+    };
+  } catch (err: any) {
+    logger.error("Failed to delete user account:", err);
+    return { success: false, message: err?.message || "Network error occurred while deleting account." };
+  }
+}
+

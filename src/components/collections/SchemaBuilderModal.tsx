@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { CollectionSchema, FieldDefinition } from "@/models/collection.model";
 import { createCollectionSchemaApi, updateCollectionSchemaApi } from "@/api/collection.api";
+import { uploadCollectionFeaturedImageApi } from "@/api/storage.api";
+import { resolveMediaUrl } from "@/utils/media";
 
 interface SchemaBuilderModalProps {
   isOpen: boolean;
@@ -40,6 +42,7 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
   const [apiIdPlural, setApiIdPlural] = useState("");
   const [icon, setIcon] = useState("fa-cube");
   const [featuredImage, setFeaturedImage] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +62,7 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
       setIcon("fa-cube");
       setFeaturedImage("");
     }
+    setImageFile(null);
     setError(null);
   }, [initialData, isOpen]);
 
@@ -78,6 +82,23 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
     setApiIdPlural(singular ? (singular.endsWith("s") ? singular : `${singular}s`) : "");
   };
 
+  const handleImageFileChange = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a valid image file (PNG, JPG, WEBP, etc.).");
+      return;
+    }
+    setError(null);
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (ev.target?.result) {
+        setFeaturedImage(ev.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -93,10 +114,19 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
       res = await updateCollectionSchemaApi(initialData.id, {
         name: name.trim(),
         icon,
-        featured_image: featuredImage.trim() || undefined,
+        featured_image: imageFile ? undefined : (featuredImage.trim() || undefined),
         api_id_singular: apiIdSingular.trim() || undefined,
         api_id_plural: apiIdPlural.trim() || undefined,
       });
+
+      if (!res.error && imageFile) {
+        const uploadRes = await uploadCollectionFeaturedImageApi(initialData.id, imageFile);
+        if (uploadRes.error) {
+          setError(`Collection settings updated, but image upload to Cloudflare failed: ${uploadRes.error}`);
+          setLoading(false);
+          return;
+        }
+      }
     } else {
       const defaultFields: FieldDefinition[] = [
         {
@@ -110,11 +140,20 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
         name: name.trim(),
         slug: slug.trim() || undefined,
         icon,
-        featured_image: featuredImage.trim() || undefined,
+        featured_image: imageFile ? undefined : (featuredImage.trim() || undefined),
         api_id_singular: apiIdSingular.trim() || undefined,
         api_id_plural: apiIdPlural.trim() || undefined,
         schema_definition: defaultFields,
       });
+
+      if (!res.error && res.collection?.id && imageFile) {
+        const uploadRes = await uploadCollectionFeaturedImageApi(res.collection.id, imageFile);
+        if (uploadRes.error) {
+          setError(`Collection created, but image upload to Cloudflare failed: ${uploadRes.error}`);
+          setLoading(false);
+          return;
+        }
+      }
     }
     setLoading(false);
 
@@ -221,61 +260,72 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
             </div>
           </div>
 
-          {/* Featured Image Option (Optional) */}
+          {/* Featured Image Option (Upload Only) */}
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
               Featured Image <span className="text-[10px] font-normal text-slate-400">(Optional)</span>
             </label>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={featuredImage}
-                  onChange={(e) => setFeaturedImage(e.target.value)}
-                  placeholder="Paste image URL (e.g. https://images.unsplash.com/...)"
-                  className="flex-1 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-                <label className="px-3.5 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer transition flex items-center gap-1.5 shrink-0">
-                  <i className="fa-solid fa-cloud-arrow-up text-xs"></i>
-                  <span>Upload Image</span>
+            <div>
+              {!featuredImage ? (
+                <label
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files?.[0];
+                    handleImageFileChange(file);
+                  }}
+                  className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-brand-500 dark:hover:border-brand-500 rounded-2xl cursor-pointer bg-slate-100/50 dark:bg-slate-800/40 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 transition-all group"
+                >
+                  <div className="flex flex-col items-center justify-center p-3 text-center">
+                    <div className="w-8 h-8 mb-1.5 rounded-xl bg-brand-50 dark:bg-brand-500/10 text-brand-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <i className="fa-solid fa-cloud-arrow-up text-sm"></i>
+                    </div>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      <span className="text-brand-500 hover:underline">Click to upload image</span> or drag & drop
+                    </p>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                      Supports PNG, JPG, GIF, or WEBP
+                    </p>
+                  </div>
                   <input
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (ev) => {
-                          if (ev.target?.result) {
-                            setFeaturedImage(ev.target.result as string);
-                          }
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
+                    onChange={(e) => handleImageFileChange(e.target.files?.[0])}
                   />
                 </label>
-              </div>
-
-              {featuredImage && (
-                <div className="relative w-full max-w-sm h-32 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 group shadow-md">
+              ) : (
+                <div className="relative w-full max-w-sm h-32 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 group shadow-md">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={featuredImage}
+                    src={resolveMediaUrl(featuredImage)}
                     alt="Featured Image Preview"
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       e.currentTarget.src = "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=300";
                     }}
                   />
-                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                  <div className="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-2">
+                    <label className="px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 backdrop-blur text-white text-xs font-semibold cursor-pointer transition flex items-center gap-1.5">
+                      <i className="fa-solid fa-arrows-rotate text-xs"></i>
+                      <span>Change Image</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleImageFileChange(e.target.files?.[0])}
+                      />
+                    </label>
                     <button
                       type="button"
-                      onClick={() => setFeaturedImage("")}
-                      className="px-3 py-1 rounded-lg bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 transition shadow-md flex items-center gap-1.5"
+                      onClick={() => {
+                        setFeaturedImage("");
+                        setImageFile(null);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold transition shadow-md flex items-center gap-1.5"
                     >
-                      <i className="fa-solid fa-trash-can"></i> Remove Image
+                      <i className="fa-solid fa-trash-can text-xs"></i>
+                      <span>Remove</span>
                     </button>
                   </div>
                 </div>

@@ -15,16 +15,22 @@ export const MediaManager: React.FC = () => {
         mediaSearch={media.mediaSearch}
         onSearchChange={media.setMediaSearch}
         onOpenUploadModal={() => media.setShowMediaModal(true)}
+        onRefresh={media.refreshMedia}
+        isLoading={media.isLoading}
+        totalCount={media.mediaList.length}
       />
 
       <MediaGrid
         mediaList={media.filteredMedia}
+        isLoading={media.isLoading}
         onDeleteMedia={media.deleteMedia}
+        selectedProjectId={media.selectedProjectId}
       />
 
       <MediaUploadModal
         isOpen={media.showMediaModal}
         newMedia={media.newMedia}
+        isUploading={media.isUploading}
         onFormChange={media.updateNewMediaForm}
         onUpload={media.uploadMedia}
         onClose={() => media.setShowMediaModal(false)}

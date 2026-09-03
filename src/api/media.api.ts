@@ -1,31 +1,160 @@
 import { MediaItem, NewMediaForm } from "@/models/media.model";
+import { APP_CONFIG } from "@/config/app.config";
+import { apiFetch, getCollectionHeaders, getSelectedProjectId } from "./client";
+import { resolveMediaUrl } from "@/utils/media";
+import { logger } from "@/utils/logger";
 
-const INITIAL_MEDIA: MediaItem[] = [
-  { id: 1, name: "minimal-headphones.jpg", url: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=300", size: "1.2 MB", format: "jpg" },
-  { id: 2, name: "leather-watch.jpg", url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=300", size: "850 KB", format: "jpg" },
-  { id: 3, name: "smart-speaker.jpg", url: "https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=300", size: "2.1 MB", format: "jpg" },
-  { id: 4, name: "wireless-mouse.jpg", url: "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&q=80&w=300", size: "640 KB", format: "jpg" },
-  { id: 5, name: "modern-backpack.jpg", url: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=300", size: "1.8 MB", format: "jpg" },
-  { id: 6, name: "ceramic-cup.jpg", url: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=300", size: "920 KB", format: "jpg" },
-];
-
-export async function fetchMediaApi(projectId?: string): Promise<MediaItem[]> {
-  await new Promise((res) => setTimeout(res, 100));
-  return [...INITIAL_MEDIA];
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
-export async function uploadMediaApi(form: NewMediaForm): Promise<MediaItem> {
-  await new Promise((res) => setTimeout(res, 300));
+function resolveItemUrl(item: { url?: string | null; path?: string | null; public_url?: string | null }): string {
+  if (item.public_url && item.public_url.trim()) {
+    return item.public_url.trim();
+  }
+  if (item.url && item.url.trim()) {
+    const u = item.url.trim();
+    if (u.startsWith("http://") || u.startsWith("https://")) {
+      return u;
+    }
+    const cleanLeading = u.startsWith("/") ? u : `/${u}`;
+    return `${APP_CONFIG.apiBaseUrl}${cleanLeading}`;
+  }
+  if (item.path && item.path.trim()) {
+    return resolveMediaUrl(item.path);
+  }
+  return "";
+}
+
+/**
+ * Fetch all media files in Cloudflare R2 under /{CLOUDFLARE_R2_FOLDER_PREFIX}/{tenant_id}/{project_id}/.
+ */
+export async function fetchMediaApi(projectId?: string): Promise<MediaItem[]> {
+  const selectedProjId = projectId || getSelectedProjectId();
+  if (!selectedProjId) {
+    return [];
+  }
+
+  const headers = getCollectionHeaders(selectedProjId);
+  const url = `${APP_CONFIG.apiBaseUrl}/storage/files?project_id=${encodeURIComponent(selectedProjId)}`;
+
+  try {
+    const res = await apiFetch(url, { headers });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      logger.error("Failed to fetch media files from Cloudflare R2:", errText);
+      return [];
+    }
+
+    const data = await res.json();
+    const files = data.files || [];
+
+    return files.map((file: any) => {
+      const filename = file.filename || "file";
+      const ext = filename.includes(".") ? filename.split(".").pop()?.toLowerCase() || "file" : "file";
+      const fileUrl = resolveItemUrl(file);
+
+      return {
+        id: file.key || file.path || filename,
+        key: file.key,
+        path: file.path,
+        name: filename,
+        url: fileUrl,
+        size: formatBytes(file.size || 0),
+        format: file.format || ext,
+        lastModified: file.last_modified,
+      };
+    });
+  } catch (err) {
+    logger.error("Network error fetching media files:", err);
+    return [];
+  }
+}
+
+/**
+ * Upload an asset directly to /{CLOUDFLARE_R2_FOLDER_PREFIX}/{tenant_id}/{project_id}/ in Cloudflare R2.
+ */
+export async function uploadMediaApi(
+  formOrFile: NewMediaForm | File,
+  projectId?: string
+): Promise<MediaItem | null> {
+  const selectedProjId = projectId || getSelectedProjectId();
+  const headers = { ...getCollectionHeaders(selectedProjId || undefined) };
+  delete headers["Content-Type"];
+
+  const formData = new FormData();
+
+  if (formOrFile instanceof File) {
+    formData.append("file", formOrFile);
+  } else if (formOrFile.file) {
+    formData.append("file", formOrFile.file);
+  } else if (formOrFile.url) {
+    // If only URL provided without a file, return as client-side media reference
+    return {
+      id: Date.now(),
+      name: formOrFile.name || "external-image",
+      url: formOrFile.url,
+      size: "External",
+      format: formOrFile.url.split(".").pop()?.split("?")[0]?.toLowerCase() || "url",
+    };
+  } else {
+    throw new Error("No file provided for upload.");
+  }
+
+  if (selectedProjId) {
+    formData.append("project_id", selectedProjId);
+  }
+
+  const url = `${APP_CONFIG.apiBaseUrl}/storage/upload`;
+  const res = await apiFetch(url, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    const errMsg = errorData.detail || errorData.message || "Failed to upload file to Cloudflare R2";
+    throw new Error(errMsg);
+  }
+
+  const data = await res.json();
+  const filename = data.filename || "file";
+  const ext = filename.includes(".") ? filename.split(".").pop()?.toLowerCase() || "file" : "file";
+  const fileUrl = resolveItemUrl(data);
+
   return {
-    id: Date.now(),
-    name: form.name || "uploaded-image.jpg",
-    url: form.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=300",
-    size: "1.5 MB",
-    format: "jpg",
+    id: data.key || data.path || filename,
+    key: data.key,
+    path: data.path,
+    name: filename,
+    url: fileUrl,
+    size: formatBytes(data.size || 0),
+    format: ext,
+    lastModified: data.uploaded_at,
   };
 }
 
-export async function deleteMediaApi(id: number | string): Promise<boolean> {
-  await new Promise((res) => setTimeout(res, 150));
-  return true;
+/**
+ * Delete a media file from Cloudflare R2.
+ */
+export async function deleteMediaApi(keyOrPath: string, projectId?: string): Promise<boolean> {
+  const selectedProjId = projectId || getSelectedProjectId();
+  const headers = getCollectionHeaders(selectedProjId || undefined);
+  const url = `${APP_CONFIG.apiBaseUrl}/storage/file?key=${encodeURIComponent(keyOrPath)}`;
+
+  try {
+    const res = await apiFetch(url, {
+      method: "DELETE",
+      headers,
+    });
+    return res.ok;
+  } catch (err) {
+    logger.error("Failed to delete media asset:", err);
+    return false;
+  }
 }

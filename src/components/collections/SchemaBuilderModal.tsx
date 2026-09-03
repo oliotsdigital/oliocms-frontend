@@ -139,7 +139,7 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
           name: "media",
           label: "Media",
           type: "media",
-          validation: { required: false, unique: false },
+          validation: { required: true, unique: false },
         },
       ];
       res = await createCollectionSchemaApi({

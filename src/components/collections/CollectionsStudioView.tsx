@@ -171,7 +171,7 @@ const isMandatoryField = (fieldName: string): boolean => {
         name: "media",
         label: "Media",
         type: "media",
-        validation: { required: false, unique: false },
+        validation: { required: true, unique: false },
       });
     }
     setEditingFields(fields);
@@ -223,7 +223,7 @@ const isMandatoryField = (fieldName: string): boolean => {
         name: "media",
         label: "Media",
         type: "media",
-        validation: { required: false, unique: false },
+        validation: { required: true, unique: false },
       });
     }
 

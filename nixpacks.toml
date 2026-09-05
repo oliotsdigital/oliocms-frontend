@@ -1,0 +1,21 @@
+# ==========================================
+# Nixpacks Configuration for Next.js Frontend
+# ==========================================
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "curl"]
+
+[phases.install]
+cmds = ["npm ci --legacy-peer-deps || npm install --legacy-peer-deps"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "node .next/standalone/server.js || npm run start -- -p ${PORT:-3000} -H 0.0.0.0"
+
+[variables]
+NODE_ENV = "production"
+NEXT_TELEMETRY_DISABLED = "1"
+PORT = "3000"
+HOSTNAME = "0.0.0.0"

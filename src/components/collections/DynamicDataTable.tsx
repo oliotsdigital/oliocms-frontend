@@ -5,6 +5,7 @@ import { CollectionRecord, CollectionSchema, FieldDefinition } from "@/models/co
 import { deleteCollectionRecordApi } from "@/api/collection.api";
 import { resolveMediaUrl } from "@/utils/media";
 import { EditRecordModal } from "./EditRecordModal";
+import { useOlio } from "@/state/OlioProvider";
 
 interface DynamicDataTableProps {
   schema: CollectionSchema;
@@ -26,26 +27,77 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
   onRefresh,
   onFilterChange,
 }) => {
+  const { toast } = useOlio();
   const [selectedRecord, setSelectedRecord] = useState<CollectionRecord | null>(null);
   const [editingRecord, setEditingRecord] = useState<CollectionRecord | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState<boolean>(false);
 
-  // Prioritized column ordering:
-  // 1. Media field(s) at first column(s) (or a virtual empty Media column if schema has no media field)
-  // 2. Title field ("title", "name", or field containing title)
-  // 3. Remaining fields in their schema order
+  const isAllSelected = records.length > 0 && selectedIds.length === records.length;
+  const isSomeSelected = selectedIds.length > 0 && selectedIds.length < records.length;
+
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(records.map((r) => r.id));
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (
+      !confirm(
+        `Are you sure you want to delete ${selectedIds.length} selected record${
+          selectedIds.length > 1 ? "s" : ""
+        }? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setIsBulkDeleting(true);
+    try {
+      const results = await Promise.all(
+        selectedIds.map((id) => deleteCollectionRecordApi(schema.id, id))
+      );
+      const successCount = results.filter((r) => r.success).length;
+      if (toast) {
+        toast.showToast(
+          `Successfully deleted ${successCount} of ${selectedIds.length} record${
+            selectedIds.length > 1 ? "s" : ""
+          }!`,
+          "success"
+        );
+      }
+      setSelectedIds([]);
+      onRefresh();
+    } catch (err) {
+      if (toast) toast.showToast("Failed to delete records. Please try again.", "error");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  // Tabular columns: Media, Title, Slug (Created At and Actions are fixed columns)
   const displayColumns = useMemo<DisplayColumn[]>(() => {
     const fields = schema.schema_definition || [];
 
-    // All media fields
-    const mediaFields = fields.filter((f) => f.type === "media");
+    // 1. Media field
+    const mediaField = fields.find(
+      (f) => f.type === "media" || f.name.toLowerCase() === "media" || f.name.toLowerCase().includes("media")
+    );
 
-    // Non-media fields
-    const nonMediaFields = fields.filter((f) => f.type !== "media");
-
-    // Find title/name field
-    const titleIndex = nonMediaFields.findIndex((f) => {
+    // 2. Title field
+    const titleField = fields.find((f) => {
       const nameLower = f.name.toLowerCase();
       const labelLower = (f.label || "").toLowerCase();
       return (
@@ -58,53 +110,59 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
       );
     });
 
-    let titleField: FieldDefinition | undefined;
-    let otherFields: FieldDefinition[] = [];
-
-    if (titleIndex !== -1) {
-      titleField = nonMediaFields[titleIndex];
-      otherFields = nonMediaFields.filter((_, idx) => idx !== titleIndex);
-    } else {
-      otherFields = nonMediaFields;
-    }
+    // 3. Slug field
+    const slugField = fields.find((f) => {
+      const nameLower = f.name.toLowerCase();
+      const labelLower = (f.label || "").toLowerCase();
+      return nameLower === "slug" || labelLower === "slug" || nameLower.includes("slug");
+    });
 
     const cols: DisplayColumn[] = [];
 
-    // Media field(s) at first column(s)
-    if (mediaFields.length > 0) {
-      mediaFields.forEach((f) => {
-        cols.push({
-          key: f.name,
-          label: f.label || f.name,
-          field: f,
-        });
+    // Media column
+    if (mediaField) {
+      cols.push({
+        key: mediaField.name,
+        label: mediaField.label || "Media",
+        field: mediaField,
       });
     } else {
-      // If media column is not available keep the row value empty
       cols.push({
-        key: "__virtual_media__",
+        key: "media",
         label: "Media",
-        isVirtualMedia: true,
+        field: { name: "media", label: "Media", type: "media" },
       });
     }
 
-    // After media, if there is another media field show that or else Go for Title
+    // Title column
     if (titleField) {
       cols.push({
         key: titleField.name,
-        label: titleField.label || titleField.name,
+        label: titleField.label || "Title",
         field: titleField,
+      });
+    } else {
+      cols.push({
+        key: "title",
+        label: "Title",
+        field: { name: "title", label: "Title", type: "string" },
       });
     }
 
-    // Remaining fields
-    otherFields.forEach((f) => {
+    // Slug column
+    if (slugField) {
       cols.push({
-        key: f.name,
-        label: f.label || f.name,
-        field: f,
+        key: slugField.name,
+        label: slugField.label || "Slug",
+        field: slugField,
       });
-    });
+    } else {
+      cols.push({
+        key: "slug",
+        label: "Slug",
+        field: { name: "slug", label: "Slug", type: "string" },
+      });
+    }
 
     return cols;
   }, [schema.schema_definition]);
@@ -174,12 +232,66 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
         )}
       </div>
 
+      {/* Bulk Actions Banner */}
+      {selectedIds.length > 0 && (
+        <div className="glass-panel rounded-2xl p-3.5 border border-brand-500/40 bg-brand-500/10 dark:bg-brand-500/15 shadow-lg flex flex-wrap items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <span className="px-2.5 py-1 rounded-lg bg-brand-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm">
+              <i className="fa-solid fa-check"></i>
+              {selectedIds.length} Selected
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline underline-offset-2 transition"
+            >
+              Deselect all
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs shadow-md shadow-rose-500/25 flex items-center gap-2 transition disabled:opacity-50"
+            >
+              {isBulkDeleting ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Deleting...</span>
+                </>
+              ) : (
+                <>
+                  <i className="fa-solid fa-trash-can text-xs"></i>
+                  <span>Delete Selected ({selectedIds.length})</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Table */}
       <div className="glass-panel rounded-2xl border border-slate-200/50 dark:border-slate-800/50 overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-100/70 dark:bg-slate-800/60 border-b border-slate-200/50 dark:border-slate-800/50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                {/* Select All Checkbox */}
+                <th className="py-3 px-4 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = isSomeSelected;
+                    }}
+                    onChange={handleSelectAll}
+                    disabled={records.length === 0 || isBulkDeleting}
+                    className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-brand-500 focus:ring-brand-500 cursor-pointer disabled:opacity-40"
+                    title={isAllSelected ? "Deselect All" : "Select All"}
+                  />
+                </th>
                 {displayColumns.map((col) => (
                   <th key={col.key} className="py-3 px-4">
                     {col.label}
@@ -195,20 +307,37 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                 records.map((row) => (
                   <tr
                     key={row.id}
-                    className="hover:bg-slate-100/50 dark:hover:bg-slate-800/40 transition"
+                    className={`transition ${
+                      selectedIds.includes(row.id)
+                        ? "bg-brand-500/10 dark:bg-brand-500/20 hover:bg-brand-500/15"
+                        : "hover:bg-slate-100/50 dark:hover:bg-slate-800/40"
+                    }`}
                   >
-                    {/* Columns rendered according to priority ordering */}
+                    {/* Row Select Checkbox */}
+                    <td className="py-3 px-4 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(row.id)}
+                        onChange={() => handleToggleSelect(row.id)}
+                        disabled={isBulkDeleting}
+                        className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-brand-500 focus:ring-brand-500 cursor-pointer"
+                      />
+                    </td>
+                    {/* Columns rendered: Media, Title, Slug */}
                     {displayColumns.map((col) => {
-                      if (col.isVirtualMedia) {
-                        return (
-                          <td key={col.key} className="py-3 px-4 text-slate-400 italic">
-                            —
-                          </td>
-                        );
-                      }
+                      const f = col.field || { name: col.key, label: col.label, type: "string" as const };
+                      let val = row.data?.[f.name];
 
-                      const f = col.field!;
-                      const val = row.data?.[f.name];
+                      // Fallback checks for standard field names
+                      if (val === undefined || val === null || val === "") {
+                        if (col.key.toLowerCase().includes("slug")) {
+                          val = row.data?.slug;
+                        } else if (col.key.toLowerCase().includes("title") || col.key.toLowerCase().includes("name")) {
+                          val = row.data?.title || row.data?.name;
+                        } else if (col.key.toLowerCase().includes("media") || f.type === "media") {
+                          val = row.data?.media || row.data?.featured_image || row.data?.image;
+                        }
+                      }
 
                       if (val === undefined || val === null || val === "") {
                         return (
@@ -218,36 +347,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                         );
                       }
 
-                      if (f.type === "boolean") {
-                        return (
-                          <td key={col.key} className="py-3 px-4">
-                            <span
-                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold inline-flex items-center gap-1 ${
-                                val
-                                  ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                                  : "bg-slate-200 dark:bg-slate-800 text-slate-500"
-                              }`}
-                            >
-                              <span
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  val ? "bg-emerald-500" : "bg-slate-400"
-                                }`}
-                              ></span>
-                              {val ? "True" : "False"}
-                            </span>
-                          </td>
-                        );
-                      }
-
-                      if (f.type === "number") {
-                        return (
-                          <td key={col.key} className="py-3 px-4 font-mono text-slate-900 dark:text-white">
-                            {typeof val === "number" ? val.toLocaleString() : val}
-                          </td>
-                        );
-                      }
-
-                      if (f.type === "media") {
+                      if (f.type === "media" || col.key.toLowerCase().includes("media")) {
                         const strVal = String(val);
                         const mediaUrl = resolveMediaUrl(strVal);
                         const isImg =
@@ -256,46 +356,41 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                           strVal.includes("images.unsplash.com");
 
                         return (
-                          <td key={col.key} className="py-2.5 px-4">
-                            <div className="flex items-center gap-2">
-                              {isImg ? (
-                                <a
-                                  href={mediaUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="group relative w-8 h-8 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 bg-slate-100 dark:bg-slate-800 flex items-center justify-center"
-                                  title="Click to view full media"
-                                >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={mediaUrl}
-                                    alt={f.label || f.name}
-                                    className="w-full h-full object-cover transition group-hover:scale-110"
-                                    onError={(e) => {
-                                      (e.target as HTMLElement).style.display = "none";
-                                    }}
-                                  />
-                                </a>
-                              ) : (
-                                <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-500/20">
-                                  <i className="fa-solid fa-file text-xs"></i>
-                                </div>
-                              )}
+                          <td key={col.key} className="py-2 px-4">
+                            {isImg ? (
                               <a
                                 href={mediaUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="font-mono text-[11px] text-slate-600 dark:text-slate-300 hover:text-brand-500 dark:hover:text-brand-400 truncate max-w-[140px]"
+                                className="group relative w-9 h-9 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-sm hover:border-brand-500/50 hover:shadow-md transition inline-flex"
                                 title={strVal}
                               >
-                                {strVal.split("/").pop()}
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={mediaUrl}
+                                  alt={f.label || f.name}
+                                  className="w-full h-full object-cover transition group-hover:scale-110"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = "none";
+                                  }}
+                                />
                               </a>
-                            </div>
+                            ) : (
+                              <a
+                                href={mediaUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-500/20 hover:border-brand-500/50 transition inline-flex"
+                                title={strVal}
+                              >
+                                <i className="fa-solid fa-file text-sm"></i>
+                              </a>
+                            )}
                           </td>
                         );
                       }
 
-                      if (col.key === "slug") {
+                      if (col.key.toLowerCase().includes("slug") || f.name.toLowerCase().includes("slug")) {
                         return (
                           <td
                             key={col.key}
@@ -312,7 +407,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                       return (
                         <td
                           key={col.key}
-                          className="py-3 px-4 text-slate-900 dark:text-white max-w-xs truncate"
+                          className="py-3 px-4 text-slate-900 dark:text-white font-semibold max-w-xs truncate"
                           title={String(val)}
                         >
                           {String(val)}
@@ -357,7 +452,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
               ) : (
                 <tr>
                   <td
-                    colSpan={displayColumns.length + 2}
+                    colSpan={displayColumns.length + 3}
                     className="py-12 text-center text-slate-400"
                   >
                     <i className="fa-solid fa-folder-open text-3xl mb-2 block"></i>

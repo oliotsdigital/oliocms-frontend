@@ -14,6 +14,7 @@ import { ImportDataModal } from "@/components/collections/ImportDataModal";
 import { DynamicDataTable } from "@/components/collections/DynamicDataTable";
 import { Pagination } from "@/components/collections/Pagination";
 import { useOlio } from "@/state/OlioProvider";
+import * as XLSX from "xlsx";
 
 interface CollectionDetailViewProps {
   collectionId: string;
@@ -86,32 +87,86 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
       return;
     }
 
-    let exportItems = records;
-    if (totalRecords > records.length) {
-      const fullRes = await fetchCollectionRecordsApi(collectionId, {
-        limit: "1000",
-        offset: "0",
-        ...(search.trim() ? { search: search.trim() } : {}),
-        ...activeFilters,
-      });
-      if (fullRes.data.length > 0) {
-        exportItems = fullRes.data;
+    try {
+      let exportItems = records;
+      if (totalRecords > records.length) {
+        const fullRes = await fetchCollectionRecordsApi(collectionId, {
+          limit: "1000",
+          offset: "0",
+          ...(search.trim() ? { search: search.trim() } : {}),
+          ...activeFilters,
+        });
+        if (fullRes.data.length > 0) {
+          exportItems = fullRes.data;
+        }
       }
+
+      const fields = schema.schema_definition || [];
+
+      // Build tabular data rows for XLSX export
+      const rows = exportItems.map((r) => {
+        const rowObj: Record<string, any> = {};
+
+        if (fields.length > 0) {
+          fields.forEach((f) => {
+            const colName = f.label || f.name;
+            let val = r.data?.[f.name];
+            if (val === undefined || val === null) {
+              rowObj[colName] = "";
+            } else if (typeof val === "boolean") {
+              rowObj[colName] = val ? "TRUE" : "FALSE";
+            } else if (typeof val === "object") {
+              rowObj[colName] = JSON.stringify(val);
+            } else {
+              rowObj[colName] = val;
+            }
+          });
+        } else {
+          Object.entries(r.data || {}).forEach(([k, v]) => {
+            if (typeof v === "object" && v !== null) {
+              rowObj[k] = JSON.stringify(v);
+            } else {
+              rowObj[k] = v ?? "";
+            }
+          });
+        }
+
+        // Include creation date
+        rowObj["Created At"] = r.created_at ? new Date(r.created_at).toISOString() : "";
+        return rowObj;
+      });
+
+      // Create sheet from tabular rows
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+
+      // Auto-fit column widths
+      if (rows.length > 0) {
+        const colWidths = Object.keys(rows[0]).map((key) => {
+          const maxLen = Math.max(
+            key.length,
+            ...rows.slice(0, 50).map((row) => String(row[key] || "").length)
+          );
+          return { wch: Math.min(Math.max(maxLen + 2, 10), 50) };
+        });
+        worksheet["!cols"] = colWidths;
+      }
+
+      const workbook = XLSX.utils.book_new();
+      const sheetName = (schema.name || "Records")
+        .substring(0, 31)
+        .replace(/[\\/?*[\]:]/g, "");
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+      const fileName = `${schema.slug || "collection"}_export_${Date.now()}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+
+      if (toast) {
+        toast.showToast(`Exported ${rows.length} records to ${fileName}`, "success");
+      }
+    } catch (err) {
+      console.error("Failed to export records as XLSX:", err);
+      if (toast) toast.showToast("Failed to export records as Excel file", "error");
     }
-
-    const exportPayload = exportItems.map((r) => r.data);
-    const jsonStr = JSON.stringify(exportPayload, null, 2);
-    const blob = new Blob([jsonStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${schema.slug}_export_${Date.now()}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    if (toast) toast.showToast(`Exported ${exportPayload.length} records successfully!`, "success");
   };
 
 
@@ -173,9 +228,9 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
               <button
                 onClick={handleExportData}
                 className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 transition text-xs font-bold flex items-center gap-1.5"
-                title="Export Collection Records as JSON"
+                title="Export Collection Records as Excel (.xlsx)"
               >
-                <i className="fa-solid fa-file-export text-xs"></i> Export Data
+                <i className="fa-solid fa-file-excel text-xs text-emerald-500"></i> Export Data (.xlsx)
               </button>
 
               <Link

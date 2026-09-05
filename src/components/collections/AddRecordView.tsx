@@ -26,8 +26,24 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
     register,
     handleSubmit,
     control,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<Record<string, any>>();
+
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const titleValue = watch("title");
+
+  useEffect(() => {
+    if (!slugManuallyEdited && titleValue) {
+      const generatedSlug = String(titleValue)
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/[\s_-]+/g, "-");
+      setValue("slug", generatedSlug, { shouldValidate: true });
+    }
+  }, [titleValue, slugManuallyEdited, setValue]);
 
   useEffect(() => {
     if (!collectionId) return;
@@ -161,9 +177,14 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
                             type={field.type === "email" ? "email" : "text"}
                             {...register(field.name, {
                               required: field.validation?.required ? `${field.label || field.name} is required` : false,
+                              onChange: () => {
+                                if (field.name === "slug") setSlugManuallyEdited(true);
+                              },
                             })}
-                            placeholder={`Enter ${field.label || field.name}...`}
-                            className="w-full px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
+                            placeholder={field.name === "slug" ? "auto-generated-slug" : `Enter ${field.label || field.name}...`}
+                            className={`w-full px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition ${
+                              field.name === "slug" ? "font-mono" : ""
+                            }`}
                           />
                         ) : field.type === "password" ? (
                           <input

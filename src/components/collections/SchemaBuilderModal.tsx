@@ -136,6 +136,12 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
           validation: { required: true, unique: false },
         },
         {
+          name: "slug",
+          label: "Slug",
+          type: "string",
+          validation: { required: true, unique: true },
+        },
+        {
           name: "media",
           label: "Media",
           type: "media",

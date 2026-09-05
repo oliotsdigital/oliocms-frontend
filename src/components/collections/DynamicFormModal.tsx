@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -31,7 +31,13 @@ export const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
     schema.schema_definition.forEach((field) => {
       const isRequired = field.validation?.required;
 
-      if (field.type === "string" || field.type === "relation" || field.type === "media") {
+      if (
+        field.type === "string" ||
+        field.type === "relation" ||
+        field.type === "media" ||
+        field.type === "uid" ||
+        field.type === "email"
+      ) {
         let strSchema = z.string();
         if (isRequired) {
           shape[field.name] = strSchema.min(1, `${field.label || field.name} is required.`);
@@ -67,12 +73,28 @@ export const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
     register,
     handleSubmit,
     control,
+    setValue,
+    watch,
     formState: { errors },
     reset,
   } = useForm({
     resolver: zodResolver(dynamicZodSchema),
     defaultValues,
   });
+
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const titleValue = watch("title");
+
+  useEffect(() => {
+    if (!slugManuallyEdited && titleValue) {
+      const generatedSlug = String(titleValue)
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/[\s_-]+/g, "-");
+      setValue("slug", generatedSlug, { shouldValidate: true });
+    }
+  }, [titleValue, slugManuallyEdited, setValue]);
 
   if (!isOpen) return null;
 
@@ -151,12 +173,18 @@ export const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
                   </span>
                 </label>
 
-                {field.type === "string" || field.type === "relation" ? (
+                {field.type === "string" || field.type === "relation" || field.type === "uid" || field.type === "email" ? (
                   <input
-                    type="text"
-                    {...register(field.name)}
-                    placeholder={`Enter ${field.label || field.name}...`}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    type={field.type === "email" ? "email" : "text"}
+                    {...register(field.name, {
+                      onChange: () => {
+                        if (field.name === "slug") setSlugManuallyEdited(true);
+                      },
+                    })}
+                    placeholder={field.name === "slug" ? "auto-generated-slug" : `Enter ${field.label || field.name}...`}
+                    className={`w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 ${
+                      field.name === "slug" ? "font-mono" : ""
+                    }`}
                   />
                 ) : field.type === "number" ? (
                   <input

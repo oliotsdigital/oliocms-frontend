@@ -86,6 +86,63 @@ const CollectionItemCard: React.FC<CollectionItemCardProps> = ({
   );
 };
 
+// Helper to identify mandatory system fields
+const isMandatoryField = (fieldName: string): boolean => {
+  const lower = fieldName.trim().toLowerCase();
+  return lower === "title" || lower === "slug" || lower === "media";
+};
+
+// Helper to ensure mandatory fields exist in standard order: title, slug, media
+const ensureMandatoryFields = (fields: FieldDefinition[]): FieldDefinition[] => {
+  const result: FieldDefinition[] = JSON.parse(JSON.stringify(fields || []));
+  const hasTitle = result.some((f) => f.name.trim().toLowerCase() === "title");
+  const hasSlug = result.some((f) => f.name.trim().toLowerCase() === "slug");
+  const hasMedia = result.some((f) => f.name.trim().toLowerCase() === "media");
+
+  if (!hasTitle) {
+    result.unshift({
+      name: "title",
+      label: "Title",
+      type: "string",
+      validation: { required: true, unique: false },
+    });
+  }
+
+  if (!hasSlug) {
+    const titlePos = result.findIndex((f) => f.name.trim().toLowerCase() === "title");
+    const insertPos = titlePos !== -1 ? titlePos + 1 : 0;
+    result.splice(insertPos, 0, {
+      name: "slug",
+      label: "Slug",
+      type: "string",
+      validation: { required: true, unique: true },
+    });
+  } else {
+    const slugField = result.find((f) => f.name.trim().toLowerCase() === "slug");
+    if (slugField) {
+      slugField.validation = {
+        ...(slugField.validation || {}),
+        required: true,
+        unique: true,
+      };
+    }
+  }
+
+  if (!hasMedia) {
+    const slugPos = result.findIndex((f) => f.name.trim().toLowerCase() === "slug");
+    const titlePos = result.findIndex((f) => f.name.trim().toLowerCase() === "title");
+    const insertPos = slugPos !== -1 ? slugPos + 1 : (titlePos !== -1 ? titlePos + 1 : result.length);
+    result.splice(insertPos, 0, {
+      name: "media",
+      label: "Media",
+      type: "media",
+      validation: { required: true, unique: false },
+    });
+  }
+
+  return result;
+};
+
 export const CollectionsStudioView: React.FC = () => {
   const searchParams = useSearchParams();
   const urlId = searchParams.get("id");
@@ -119,7 +176,7 @@ export const CollectionsStudioView: React.FC = () => {
         setEditingName(targetCol.name);
         setEditingIcon(targetCol.icon || "fa-cube");
         setEditingFeaturedImage(targetCol.featured_image || "");
-        setEditingFields(JSON.parse(JSON.stringify(targetCol.schema_definition || [])));
+        setEditingFields(ensureMandatoryFields(targetCol.schema_definition || []));
       } else {
         const currentExists = collections.some((c) => c.id === selectedId);
         if (!selectedId || !currentExists) {
@@ -128,7 +185,7 @@ export const CollectionsStudioView: React.FC = () => {
           setEditingName(first.name);
           setEditingIcon(first.icon || "fa-cube");
           setEditingFeaturedImage(first.featured_image || "");
-          setEditingFields(JSON.parse(JSON.stringify(first.schema_definition || [])));
+          setEditingFields(ensureMandatoryFields(first.schema_definition || []));
         }
       }
     } else {
@@ -140,41 +197,13 @@ export const CollectionsStudioView: React.FC = () => {
     }
   }, [collections, urlId]);
 
-// Helper to identify mandatory system fields
-const isMandatoryField = (fieldName: string): boolean => {
-  const lower = fieldName.trim().toLowerCase();
-  return lower === "title" || lower === "media";
-};
-
   // Sync edit state when user selects a collection from sidebar
   const handleSelectCollection = (col: CollectionSchema) => {
     setSelectedId(col.id);
     setEditingName(col.name);
     setEditingIcon(col.icon || "fa-cube");
     setEditingFeaturedImage(col.featured_image || "");
-
-    const fields: FieldDefinition[] = JSON.parse(JSON.stringify(col.schema_definition || []));
-    const hasTitle = fields.some((f) => f.name.trim().toLowerCase() === "title");
-    const hasMedia = fields.some((f) => f.name.trim().toLowerCase() === "media");
-    if (!hasTitle) {
-      fields.unshift({
-        name: "title",
-        label: "Title",
-        type: "string",
-        validation: { required: true, unique: false },
-      });
-    }
-    if (!hasMedia) {
-      const titlePos = fields.findIndex((f) => f.name.trim().toLowerCase() === "title");
-      const insertPos = titlePos !== -1 ? titlePos + 1 : 1;
-      fields.splice(insertPos, 0, {
-        name: "media",
-        label: "Media",
-        type: "media",
-        validation: { required: true, unique: false },
-      });
-    }
-    setEditingFields(fields);
+    setEditingFields(ensureMandatoryFields(col.schema_definition || []));
   };
 
   const handleDeleteCollection = async (e: React.MouseEvent, id: string, name: string) => {
@@ -204,28 +233,8 @@ const isMandatoryField = (fieldName: string): boolean => {
       return;
     }
 
-    // Ensure mandatory title and media are preserved
-    const fieldsToSave = [...editingFields];
-    const hasTitle = fieldsToSave.some((f) => f.name.trim().toLowerCase() === "title");
-    const hasMedia = fieldsToSave.some((f) => f.name.trim().toLowerCase() === "media");
-    if (!hasTitle) {
-      fieldsToSave.unshift({
-        name: "title",
-        label: "Title",
-        type: "string",
-        validation: { required: true, unique: false },
-      });
-    }
-    if (!hasMedia) {
-      const titlePos = fieldsToSave.findIndex((f) => f.name.trim().toLowerCase() === "title");
-      const insertPos = titlePos !== -1 ? titlePos + 1 : 1;
-      fieldsToSave.splice(insertPos, 0, {
-        name: "media",
-        label: "Media",
-        type: "media",
-        validation: { required: true, unique: false },
-      });
-    }
+    // Ensure mandatory title, slug, and media are preserved
+    const fieldsToSave = ensureMandatoryFields(editingFields);
 
     setIsSaving(true);
     const res = await updateCollectionSchemaApi(selectedId, {
@@ -293,6 +302,11 @@ const isMandatoryField = (fieldName: string): boolean => {
   };
 
   const handleValidationToggle = (index: number, valKey: "required" | "unique") => {
+    const target = editingFields[index];
+    if (target && target.name.trim().toLowerCase() === "slug") {
+      if (toast) toast.showToast(`The "slug" field is mandatory and must always be both Required and Unique`, "info");
+      return;
+    }
     const updated = [...editingFields];
     const currentVal = updated[index].validation || {};
     updated[index].validation = {
@@ -483,6 +497,7 @@ const isMandatoryField = (fieldName: string): boolean => {
                 <div className="space-y-3 max-h-[550px] overflow-y-auto pr-1">
                   {editingFields.map((field, idx) => {
                     const isMandatory = isMandatoryField(field.name);
+                    const isSlug = field.name.trim().toLowerCase() === "slug";
 
                     return (
                       <div
@@ -572,24 +587,44 @@ const isMandatoryField = (fieldName: string): boolean => {
                           </select>
                         </div>
 
-                        {/* Validation Toggles (Always Editable) & Delete */}
+                        {/* Validation Toggles & Delete */}
                         <div className="flex items-center justify-between md:justify-end gap-4 pt-2 md:pt-5 border-t md:border-t-0 border-slate-200 dark:border-slate-800">
-                          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+                          <label
+                            className={`flex items-center gap-1.5 text-xs font-bold ${
+                              isSlug
+                                ? "text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                                : "cursor-pointer text-slate-700 dark:text-slate-300"
+                            }`}
+                            title={isSlug ? "Slug is strictly required and non-editable" : undefined}
+                          >
                             <input
                               type="checkbox"
-                              checked={!!field.validation?.required}
+                              checked={isSlug ? true : !!field.validation?.required}
+                              disabled={isSlug}
                               onChange={() => handleValidationToggle(idx, "required")}
-                              className="rounded border-slate-300 text-brand-500 focus:ring-brand-500 cursor-pointer"
+                              className={`rounded border-slate-300 text-brand-500 focus:ring-brand-500 ${
+                                isSlug ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                              }`}
                             />
                             Required
                           </label>
 
-                          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+                          <label
+                            className={`flex items-center gap-1.5 text-xs font-bold ${
+                              isSlug
+                                ? "text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                                : "cursor-pointer text-slate-700 dark:text-slate-300"
+                            }`}
+                            title={isSlug ? "Slug is strictly unique and non-editable" : undefined}
+                          >
                             <input
                               type="checkbox"
-                              checked={!!field.validation?.unique}
+                              checked={isSlug ? true : !!field.validation?.unique}
+                              disabled={isSlug}
                               onChange={() => handleValidationToggle(idx, "unique")}
-                              className="rounded border-slate-300 text-brand-500 focus:ring-brand-500 cursor-pointer"
+                              className={`rounded border-slate-300 text-brand-500 focus:ring-brand-500 ${
+                                isSlug ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                              }`}
                             />
                             Unique
                           </label>

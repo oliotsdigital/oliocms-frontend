@@ -295,6 +295,20 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                         );
                       }
 
+                      if (col.key === "slug") {
+                        return (
+                          <td
+                            key={col.key}
+                            className="py-3 px-4 max-w-xs truncate"
+                            title={String(val)}
+                          >
+                            <span className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                              /{String(val).replace(/^\/+/, "")}
+                            </span>
+                          </td>
+                        );
+                      }
+
                       return (
                         <td
                           key={col.key}

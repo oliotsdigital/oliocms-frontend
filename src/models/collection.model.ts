@@ -72,3 +72,18 @@ export interface CreateCollectionPayload {
 export interface CreateRecordPayload {
   data: Record<string, any>;
 }
+
+export interface PageMeta {
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
+export interface PaginatedRecordsResponse {
+  data: CollectionRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}

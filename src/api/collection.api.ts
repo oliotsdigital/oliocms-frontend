@@ -5,6 +5,7 @@ import {
   CollectionSchema,
   CollectionRecord,
   CreateCollectionPayload,
+  PaginatedRecordsResponse,
 } from "@/models/collection.model";
 
 const API_BASE_URL = APP_CONFIG.apiBaseUrl;
@@ -189,15 +190,15 @@ export async function deleteCollectionSchemaApi(
 export async function fetchCollectionRecordsApi(
   collectionId: string,
   filters?: Record<string, string>
-): Promise<CollectionRecord[]> {
+): Promise<PaginatedRecordsResponse> {
   if (!isUuid(collectionId)) {
     logger.warn(`Skipping collection records fetch; id is not a UUID: ${collectionId}`);
-    return [];
+    return { data: [], total: 0, limit: 10, offset: 0, has_more: false };
   }
   const selectedProjId = resolveProjectId();
   if (!selectedProjId) {
     logger.warn("Skipping collection records fetch; no project selected.");
-    return [];
+    return { data: [], total: 0, limit: 10, offset: 0, has_more: false };
   }
   logger.info(`Fetching records for collection ${collectionId}...`, filters);
   try {
@@ -216,16 +217,21 @@ export async function fetchCollectionRecordsApi(
     });
     if (res.ok) {
       const json = await res.json();
-      const items = json.data || json.items || json;
+      const items = json.data || json.items || (Array.isArray(json) ? json : []);
+      const total = typeof json.meta?.total === "number" ? json.meta.total : items.length;
+      const limit = typeof json.meta?.limit === "number" ? json.meta.limit : items.length;
+      const offset = typeof json.meta?.offset === "number" ? json.meta.offset : 0;
+      const has_more = typeof json.meta?.has_more === "boolean" ? json.meta.has_more : false;
+
       if (Array.isArray(items)) {
-        logger.success(`Fetched ${items.length} records from API.`);
-        return items;
+        logger.success(`Fetched ${items.length} records from API (Total: ${total}).`);
+        return { data: items, total, limit, offset, has_more };
       }
     }
   } catch (err) {
     logger.warn("Failed to fetch collection records from API:", err);
   }
-  return [];
+  return { data: [], total: 0, limit: 10, offset: 0, has_more: false };
 }
 
 export async function createCollectionRecordApi(

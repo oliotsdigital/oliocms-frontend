@@ -12,6 +12,7 @@ import {
 import { DynamicFormModal } from "@/components/collections/DynamicFormModal";
 import { ImportDataModal } from "@/components/collections/ImportDataModal";
 import { DynamicDataTable } from "@/components/collections/DynamicDataTable";
+import { Pagination } from "@/components/collections/Pagination";
 import { useOlio } from "@/state/OlioProvider";
 
 interface CollectionDetailViewProps {
@@ -25,6 +26,9 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [totalRecords, setTotalRecords] = useState<number>(0);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
@@ -36,14 +40,18 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
     setSchema(schemaData);
 
     if (schemaData) {
-      const filterParams = { ...activeFilters };
+      const filterParams: Record<string, string> = { ...activeFilters };
       if (search.trim()) filterParams["search"] = search.trim();
-      const recordsData = await fetchCollectionRecordsApi(collectionId, filterParams);
+      filterParams["limit"] = String(pageSize);
+      filterParams["offset"] = String((page - 1) * pageSize);
+
+      const res = await fetchCollectionRecordsApi(collectionId, filterParams);
       if (signal?.cancelled) return;
-      setRecords(recordsData);
+      setRecords(res.data);
+      setTotalRecords(res.total);
     }
     setLoading(false);
-  }, [collectionId, search, activeFilters]);
+  }, [collectionId, search, activeFilters, page, pageSize]);
 
   useEffect(() => {
     const signal = { cancelled: false };
@@ -53,13 +61,45 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
     };
   }, [loadData]);
 
-  const handleExportData = () => {
-    if (!schema || records.length === 0) {
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
+    setPage(1);
+  };
+
+  const handleFilterChange = (filters: Record<string, string>) => {
+    setActiveFilters(filters);
+    setPage(1);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setPage(1);
+  };
+
+  const handleExportData = async () => {
+    if (!schema || totalRecords === 0) {
       if (toast) toast.showToast("No records available to export", "error");
       return;
     }
 
-    const exportPayload = records.map((r) => r.data);
+    let exportItems = records;
+    if (totalRecords > records.length) {
+      const fullRes = await fetchCollectionRecordsApi(collectionId, {
+        limit: "1000",
+        offset: "0",
+        ...(search.trim() ? { search: search.trim() } : {}),
+        ...activeFilters,
+      });
+      if (fullRes.data.length > 0) {
+        exportItems = fullRes.data;
+      }
+    }
+
+    const exportPayload = exportItems.map((r) => r.data);
     const jsonStr = JSON.stringify(exportPayload, null, 2);
     const blob = new Blob([jsonStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -71,7 +111,7 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    if (toast) toast.showToast(`Exported ${records.length} records successfully!`, "success");
+    if (toast) toast.showToast(`Exported ${exportPayload.length} records successfully!`, "success");
   };
 
 
@@ -92,7 +132,7 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
 
           {schema && (
             <div className="text-xs font-semibold text-slate-500">
-              Total Entries: <strong className="text-slate-900 dark:text-white">{records.length}</strong>
+              Total Entries: <strong className="text-slate-900 dark:text-white">{totalRecords}</strong>
             </div>
           )}
         </div>
@@ -106,7 +146,7 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
               <input
                 type="text"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder={`Search ${schema.name} records...`}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
@@ -114,14 +154,6 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
 
             {/* Action Buttons */}
             <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
-              <button
-                onClick={() => setIsImportModalOpen(true)}
-                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 transition text-xs font-bold flex items-center gap-1.5"
-                title="Import Records from Excel (.xlsx, .xls) or CSV"
-              >
-                <i className="fa-solid fa-file-import text-xs"></i> Import Data
-              </button>
-
               <Link
                 href={`/collections/${schema.id}/apis`}
                 className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
@@ -129,6 +161,14 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
               >
                 <i className="fa-solid fa-code text-xs text-brand-500"></i> Get APIs
               </Link>
+
+              <button
+                onClick={() => setIsImportModalOpen(true)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 transition text-xs font-bold flex items-center gap-1.5"
+                title="Import Records from Excel (.xlsx, .xls) or CSV"
+              >
+                <i className="fa-solid fa-file-import text-xs"></i> Import Data
+              </button>
 
               <button
                 onClick={handleExportData}
@@ -173,7 +213,18 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
               schema={schema}
               records={records}
               onRefresh={() => loadData()}
-              onFilterChange={(filters) => setActiveFilters(filters)}
+              onFilterChange={handleFilterChange}
+            />
+
+            {/* Pagination Controls */}
+            <Pagination
+              currentPage={page}
+              totalItems={totalRecords}
+              pageSize={pageSize}
+              pageSizeOptions={[10, 25, 50, 100]}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+              isLoading={loading}
             />
 
             {/* Ingest Record Modal */}

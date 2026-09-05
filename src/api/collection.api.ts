@@ -6,6 +6,7 @@ import {
   CollectionRecord,
   CreateCollectionPayload,
   PaginatedRecordsResponse,
+  BatchImportResult,
 } from "@/models/collection.model";
 
 const API_BASE_URL = APP_CONFIG.apiBaseUrl;
@@ -19,6 +20,22 @@ function isUuid(value: string | undefined | null): value is string {
 
 function resolveProjectId(projectId?: string): string | null {
   return projectId || getSelectedProjectId();
+}
+
+function normalizeCollectionRecord(item: unknown): CollectionRecord | null {
+  if (!item || typeof item !== "object") return null;
+  const raw = item as Record<string, any>;
+  if (!raw.id) return null;
+
+  const nestedData =
+    raw.data && typeof raw.data === "object" && !Array.isArray(raw.data) ? raw.data : null;
+
+  return {
+    id: String(raw.id),
+    data: nestedData || {},
+    created_at: raw.created_at || "",
+    updated_at: raw.updated_at || raw.created_at || "",
+  };
 }
 
 export async function fetchCollectionsApi(projectId?: string): Promise<CollectionSchema[]> {
@@ -224,8 +241,11 @@ export async function fetchCollectionRecordsApi(
       const has_more = typeof json.meta?.has_more === "boolean" ? json.meta.has_more : false;
 
       if (Array.isArray(items)) {
-        logger.success(`Fetched ${items.length} records from API (Total: ${total}).`);
-        return { data: items, total, limit, offset, has_more };
+        const records = items
+          .map(normalizeCollectionRecord)
+          .filter((record): record is CollectionRecord => record !== null);
+        logger.success(`Fetched ${records.length} records from API (Total: ${total}).`);
+        return { data: records, total, limit, offset, has_more };
       }
     }
   } catch (err) {
@@ -252,7 +272,7 @@ export async function createCollectionRecordApi(
     const resJson = await res.json();
     if (res.ok) {
       logger.success("Record created successfully on backend API.", resJson);
-      return { record: resJson };
+      return { record: normalizeCollectionRecord(resJson.data || resJson) || undefined };
     } else {
       const errMsg =
         typeof resJson.detail === "string"
@@ -266,13 +286,45 @@ export async function createCollectionRecordApi(
   }
 }
 
+function toCount(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeBatchErrors(errors: unknown): string[] {
+  if (!Array.isArray(errors)) return [];
+  return errors.map((err) => {
+    if (typeof err === "string") return err;
+    if (err && typeof err === "object") {
+      const obj = err as Record<string, unknown>;
+      if (typeof obj.message === "string") {
+        const row = obj.row ?? obj.index ?? obj.line;
+        return row != null ? `Row ${row}: ${obj.message}` : obj.message;
+      }
+      try {
+        return JSON.stringify(err);
+      } catch {
+        return "Unknown import error";
+      }
+    }
+    return String(err);
+  });
+}
+
 export async function batchCreateCollectionRecordsApi(
   collectionId: string,
   records: Record<string, any>[]
-): Promise<{ importedCount?: number; failedCount?: number; errors?: string[]; error?: string }> {
+): Promise<BatchImportResult> {
   const selectedProjId = resolveProjectId();
   if (!selectedProjId) {
-    return { error: "Select a website before importing records." };
+    return {
+      createdCount: 0,
+      updatedCount: 0,
+      unchangedCount: 0,
+      failedCount: 0,
+      errors: [],
+      error: "Select a website before importing records.",
+    };
   }
   logger.info(`Batch importing ${records.length} records for collection ${collectionId}`);
   try {
@@ -285,20 +337,36 @@ export async function batchCreateCollectionRecordsApi(
     if (res.ok) {
       logger.success("Batch records imported successfully on backend API.", resJson);
       return {
-        importedCount: resJson.imported_count,
-        failedCount: resJson.failed_count,
-        errors: resJson.errors || [],
+        createdCount: toCount(resJson.created_count),
+        updatedCount: toCount(resJson.updated_count),
+        unchangedCount: toCount(resJson.unchanged_count),
+        failedCount: toCount(resJson.failed_count),
+        errors: normalizeBatchErrors(resJson.errors),
       };
     } else {
       const errMsg =
         typeof resJson.detail === "string"
           ? resJson.detail
           : resJson.error || resJson.message || "Batch record ingestion failed";
-      return { error: errMsg };
+      return {
+        createdCount: 0,
+        updatedCount: 0,
+        unchangedCount: 0,
+        failedCount: 0,
+        errors: [],
+        error: errMsg,
+      };
     }
   } catch (err: any) {
     logger.error("Network error batch importing collection records:", err);
-    return { error: err?.message || "Network error batch importing collection records" };
+    return {
+      createdCount: 0,
+      updatedCount: 0,
+      unchangedCount: 0,
+      failedCount: 0,
+      errors: [],
+      error: err?.message || "Network error batch importing collection records",
+    };
   }
 }
 
@@ -321,7 +389,7 @@ export async function updateCollectionRecordApi(
     const resJson = await res.json();
     if (res.ok) {
       logger.success("Record updated successfully on backend API.", resJson);
-      return { record: resJson };
+      return { record: normalizeCollectionRecord(resJson.data || resJson) || undefined };
     } else {
       const errMsg =
         typeof resJson.detail === "string"

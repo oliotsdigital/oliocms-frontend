@@ -2,9 +2,11 @@
 
 import React, { useState, useMemo, useRef } from "react";
 import * as XLSX from "xlsx";
-import { CollectionSchema, FieldDefinition } from "@/models/collection.model";
+import { BatchImportResult, CollectionSchema, FieldDefinition } from "@/models/collection.model";
 import { batchCreateCollectionRecordsApi } from "@/api/collection.api";
 import { useOlio } from "@/state/OlioProvider";
+
+type ImportStats = Omit<BatchImportResult, "error">;
 
 interface ImportDataModalProps {
   isOpen: boolean;
@@ -34,7 +36,7 @@ export const ImportDataModal: React.FC<ImportDataModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [importStats, setImportStats] = useState<{ imported: number; failed: number; errors: string[] } | null>(null);
+  const [importStats, setImportStats] = useState<ImportStats | null>(null);
 
   const resetState = () => {
     setStep("upload");
@@ -259,14 +261,26 @@ export const ImportDataModal: React.FC<ImportDataModalProps> = ({
       setErrorMsg(res.error);
       setStep("map");
     } else {
-      setImportStats({
-        imported: res.importedCount ?? transformed.length,
-        failed: res.failedCount ?? 0,
-        errors: res.errors || [],
-      });
+      const stats: ImportStats = {
+        createdCount: res.createdCount,
+        updatedCount: res.updatedCount,
+        unchangedCount: res.unchangedCount,
+        failedCount: res.failedCount,
+        errors: res.errors,
+      };
+      setImportStats(stats);
       setStep("complete");
       if (toast) {
-        toast.showToast(`Successfully imported ${res.importedCount ?? transformed.length} records!`, "success");
+        const summary = [
+          `${stats.createdCount} created`,
+          `${stats.updatedCount} updated`,
+          `${stats.unchangedCount} unchanged`,
+        ];
+        if (stats.failedCount > 0) summary.push(`${stats.failedCount} failed`);
+        toast.showToast(
+          `Import finished: ${summary.join(", ")}`,
+          stats.failedCount > 0 ? "error" : "success"
+        );
       }
       onSuccess();
     }
@@ -625,21 +639,73 @@ export const ImportDataModal: React.FC<ImportDataModalProps> = ({
 
         {/* STEP 5: COMPLETED */}
         {step === "complete" && importStats && (
-          <div className="mt-6 flex-1 flex flex-col items-center justify-center py-8 text-center space-y-4">
-            <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center justify-center text-3xl shadow-lg shadow-emerald-500/10">
-              <i className="fa-solid fa-circle-check"></i>
+          <div className="mt-6 flex-1 flex flex-col items-center justify-center py-6 text-center space-y-5">
+            <div
+              className={`w-16 h-16 rounded-3xl border flex items-center justify-center text-3xl shadow-lg ${
+                importStats.failedCount > 0
+                  ? "bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-amber-500/10"
+                  : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-emerald-500/10"
+              }`}
+            >
+              <i className={`fa-solid ${importStats.failedCount > 0 ? "fa-triangle-exclamation" : "fa-circle-check"}`}></i>
             </div>
             <div>
               <h4 className="text-lg font-bold text-slate-900 dark:text-white">
-                Import Complete!
+                {importStats.failedCount > 0 ? "Import finished with issues" : "Import Complete!"}
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Successfully ingested <strong className="text-emerald-500 font-bold">{importStats.imported}</strong> records into {schema.name}.
+                Processed <strong className="text-slate-900 dark:text-white font-bold">{rawRows.length}</strong> spreadsheet rows into {schema.name}.
               </p>
             </div>
 
+            <div className="w-full max-w-xl grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {(
+                [
+                  {
+                    label: "Created",
+                    value: importStats.createdCount,
+                    icon: "fa-plus",
+                    tone: "text-emerald-500 bg-emerald-500/10",
+                  },
+                  {
+                    label: "Updated",
+                    value: importStats.updatedCount,
+                    icon: "fa-rotate",
+                    tone: "text-indigo-500 bg-indigo-500/10",
+                  },
+                  {
+                    label: "Unchanged",
+                    value: importStats.unchangedCount,
+                    icon: "fa-equals",
+                    tone: "text-slate-500 bg-slate-500/10",
+                  },
+                  {
+                    label: "Failed",
+                    value: importStats.failedCount,
+                    icon: "fa-circle-xmark",
+                    tone: importStats.failedCount > 0
+                      ? "text-rose-500 bg-rose-500/10"
+                      : "text-slate-500 bg-slate-500/10",
+                  },
+                ] as const
+              ).map((stat) => (
+                <div
+                  key={stat.label}
+                  className="p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 text-left"
+                >
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    <span className={`w-5 h-5 rounded-lg ${stat.tone} flex items-center justify-center`}>
+                      <i className={`fa-solid ${stat.icon} text-[9px]`}></i>
+                    </span>
+                    {stat.label}
+                  </div>
+                  <p className="mt-1.5 text-xl font-bold text-slate-900 dark:text-white">{stat.value}</p>
+                </div>
+              ))}
+            </div>
+
             {importStats.errors.length > 0 && (
-              <div className="w-full max-w-lg p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs text-left max-h-32 overflow-y-auto">
+              <div className="w-full max-w-xl p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs text-left max-h-32 overflow-y-auto">
                 <p className="font-bold mb-1">Row warnings / skipped:</p>
                 <ul className="list-disc pl-4 space-y-0.5">
                   {importStats.errors.map((err, i) => (
@@ -651,7 +717,7 @@ export const ImportDataModal: React.FC<ImportDataModalProps> = ({
 
             <button
               onClick={handleClose}
-              className="mt-4 px-6 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition"
+              className="mt-1 px-6 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition"
             >
               View Records in Collection
             </button>

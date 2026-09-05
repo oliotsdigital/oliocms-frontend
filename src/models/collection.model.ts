@@ -49,9 +49,6 @@ export interface CollectionSchema {
 
 export interface CollectionRecord {
   id: string;
-  tenant_id: string;
-  project_id?: string;
-  collection_id: string;
   data: Record<string, any>;
   created_at: string;
   updated_at: string;
@@ -71,6 +68,15 @@ export interface CreateCollectionPayload {
 
 export interface CreateRecordPayload {
   data: Record<string, any>;
+}
+
+export interface BatchImportResult {
+  createdCount: number;
+  updatedCount: number;
+  unchangedCount: number;
+  failedCount: number;
+  errors: string[];
+  error?: string;
 }
 
 export interface PageMeta {

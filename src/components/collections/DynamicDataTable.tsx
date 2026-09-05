@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CollectionRecord, CollectionSchema, FieldDefinition } from "@/models/collection.model";
 import { deleteCollectionRecordApi } from "@/api/collection.api";
 import { resolveMediaUrl } from "@/utils/media";
@@ -34,6 +34,9 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkDeleting, setIsBulkDeleting] = useState<boolean>(false);
+  const [visibleOptionalKeys, setVisibleOptionalKeys] = useState<string[]>([]);
+  const [isColumnsOpen, setIsColumnsOpen] = useState(false);
+  const columnsMenuRef = useRef<HTMLDivElement>(null);
 
   const isAllSelected = records.length > 0 && selectedIds.length === records.length;
   const isSomeSelected = selectedIds.length > 0 && selectedIds.length < records.length;
@@ -167,6 +170,48 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
     return cols;
   }, [schema.schema_definition]);
 
+  const defaultColumnKeys = useMemo(
+    () => new Set(displayColumns.map((col) => col.key)),
+    [displayColumns]
+  );
+
+  const optionalColumns = useMemo<DisplayColumn[]>(() => {
+    return (schema.schema_definition || [])
+      .filter((f) => !defaultColumnKeys.has(f.name))
+      .map((f) => ({
+        key: f.name,
+        label: f.label || f.name,
+        field: f,
+      }));
+  }, [schema.schema_definition, defaultColumnKeys]);
+
+  const visibleColumns = useMemo(() => {
+    const extras = optionalColumns.filter((col) => visibleOptionalKeys.includes(col.key));
+    return [...displayColumns, ...extras];
+  }, [displayColumns, optionalColumns, visibleOptionalKeys]);
+
+  useEffect(() => {
+    setVisibleOptionalKeys([]);
+    setIsColumnsOpen(false);
+  }, [schema.id]);
+
+  useEffect(() => {
+    if (!isColumnsOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!columnsMenuRef.current?.contains(event.target as Node)) {
+        setIsColumnsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isColumnsOpen]);
+
+  const toggleOptionalColumn = (key: string) => {
+    setVisibleOptionalKeys((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
+    );
+  };
+
   const handleDelete = async (recordId: string) => {
     if (!confirm("Are you sure you want to delete this record?")) return;
     setDeletingId(recordId);
@@ -185,7 +230,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
   return (
     <div className="space-y-4">
       {/* Inline Filter Controls Bar */}
-      <div className="p-3 rounded-2xl glass-panel border border-slate-200/50 dark:border-slate-800/50 flex flex-wrap items-center gap-3">
+      <div className="relative z-20 p-3 rounded-2xl glass-panel border border-slate-200/50 dark:border-slate-800/50 flex flex-wrap items-center gap-3">
         <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
           <i className="fa-solid fa-filter text-brand-500"></i> Dynamic Filters:
         </span>
@@ -219,17 +264,91 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
           return null;
         })}
 
-        {Object.keys(filterValues).length > 0 && (
-          <button
-            onClick={() => {
-              setFilterValues({});
-              if (onFilterChange) onFilterChange({});
-            }}
-            className="text-xs text-rose-500 hover:underline font-semibold ml-auto"
-          >
-            Clear Filters
-          </button>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {optionalColumns.length > 0 && (
+            <div className="relative" ref={columnsMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsColumnsOpen((open) => !open)}
+                className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
+                  visibleOptionalKeys.length > 0
+                    ? "bg-brand-500/10 border-brand-500/30 text-brand-500"
+                    : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-brand-500"
+                }`}
+                title="Show additional collection fields as table columns"
+              >
+                <i className="fa-solid fa-table-columns text-[11px]"></i>
+                <span>Columns</span>
+                {visibleOptionalKeys.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-md bg-brand-500 text-white text-[10px] font-bold">
+                    {visibleOptionalKeys.length}
+                  </span>
+                )}
+                <i className={`fa-solid fa-chevron-${isColumnsOpen ? "up" : "down"} text-[9px]`}></i>
+              </button>
+
+              {isColumnsOpen && (
+                <div className="absolute right-0 top-full mt-2 z-50 w-64 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-3">
+                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+                    Extra columns
+                  </p>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-3">
+                    Media, Title, and Slug stay visible. Check a field to add it.
+                  </p>
+                  <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+                    {optionalColumns.map((col) => {
+                      const checked = visibleOptionalKeys.includes(col.key);
+                      return (
+                        <label
+                          key={col.key}
+                          className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl cursor-pointer transition ${
+                            checked
+                              ? "bg-brand-500/10 text-slate-900 dark:text-white"
+                              : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleOptionalColumn(col.key)}
+                            className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-brand-500 focus:ring-brand-500"
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-xs font-semibold truncate">{col.label}</span>
+                            <span className="block text-[10px] font-mono text-slate-400 truncate">
+                              {col.key}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {visibleOptionalKeys.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleOptionalKeys([])}
+                      className="mt-2 w-full text-[11px] font-semibold text-rose-500 hover:underline"
+                    >
+                      Reset to default columns
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {Object.keys(filterValues).length > 0 && (
+            <button
+              onClick={() => {
+                setFilterValues({});
+                if (onFilterChange) onFilterChange({});
+              }}
+              className="text-xs text-rose-500 hover:underline font-semibold"
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Bulk Actions Banner */}
@@ -292,7 +411,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                     title={isAllSelected ? "Deselect All" : "Select All"}
                   />
                 </th>
-                {displayColumns.map((col) => (
+                {visibleColumns.map((col) => (
                   <th key={col.key} className="py-3 px-4">
                     {col.label}
                   </th>
@@ -323,8 +442,8 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                         className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-brand-500 focus:ring-brand-500 cursor-pointer"
                       />
                     </td>
-                    {/* Columns rendered: Media, Title, Slug */}
-                    {displayColumns.map((col) => {
+                    {/* Default columns plus any extra fields the user enabled */}
+                    {visibleColumns.map((col) => {
                       const f = col.field || { name: col.key, label: col.label, type: "string" as const };
                       let val = row.data?.[f.name];
 
@@ -404,13 +523,50 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                         );
                       }
 
+                      if (f.type === "boolean") {
+                        const isTrue = val === true || String(val).toLowerCase() === "true" || val === 1 || val === "1";
+                        return (
+                          <td key={col.key} className="py-3 px-4">
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                                isTrue
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                              }`}
+                            >
+                              {isTrue ? "True" : "False"}
+                            </span>
+                          </td>
+                        );
+                      }
+
+                      if (f.type === "date") {
+                        const dateVal = new Date(String(val));
+                        return (
+                          <td key={col.key} className="py-3 px-4 text-slate-600 dark:text-slate-300 text-[11px]">
+                            {Number.isNaN(dateVal.getTime()) ? String(val) : dateVal.toLocaleDateString()}
+                          </td>
+                        );
+                      }
+
+                      if (f.type === "password") {
+                        return (
+                          <td key={col.key} className="py-3 px-4 text-slate-400 font-mono text-[11px]">
+                            ••••••••
+                          </td>
+                        );
+                      }
+
+                      const displayVal =
+                        typeof val === "object" ? JSON.stringify(val) : String(val);
+
                       return (
                         <td
                           key={col.key}
                           className="py-3 px-4 text-slate-900 dark:text-white font-semibold max-w-xs truncate"
-                          title={String(val)}
+                          title={displayVal}
                         >
-                          {String(val)}
+                          {displayVal}
                         </td>
                       );
                     })}
@@ -452,7 +608,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
               ) : (
                 <tr>
                   <td
-                    colSpan={displayColumns.length + 3}
+                    colSpan={visibleColumns.length + 3}
                     className="py-12 text-center text-slate-400"
                   >
                     <i className="fa-solid fa-folder-open text-3xl mb-2 block"></i>

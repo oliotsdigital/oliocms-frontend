@@ -260,6 +260,42 @@ export async function createCollectionRecordApi(
   }
 }
 
+export async function batchCreateCollectionRecordsApi(
+  collectionId: string,
+  records: Record<string, any>[]
+): Promise<{ importedCount?: number; failedCount?: number; errors?: string[]; error?: string }> {
+  const selectedProjId = resolveProjectId();
+  if (!selectedProjId) {
+    return { error: "Select a website before importing records." };
+  }
+  logger.info(`Batch importing ${records.length} records for collection ${collectionId}`);
+  try {
+    const res = await apiFetch(`${API_BASE_URL}/collections/${collectionId}/records/batch`, {
+      method: "POST",
+      headers: getCollectionHeaders(selectedProjId),
+      body: JSON.stringify({ records }),
+    });
+    const resJson = await res.json();
+    if (res.ok) {
+      logger.success("Batch records imported successfully on backend API.", resJson);
+      return {
+        importedCount: resJson.imported_count,
+        failedCount: resJson.failed_count,
+        errors: resJson.errors || [],
+      };
+    } else {
+      const errMsg =
+        typeof resJson.detail === "string"
+          ? resJson.detail
+          : resJson.error || resJson.message || "Batch record ingestion failed";
+      return { error: errMsg };
+    }
+  } catch (err: any) {
+    logger.error("Network error batch importing collection records:", err);
+    return { error: err?.message || "Network error batch importing collection records" };
+  }
+}
+
 export async function updateCollectionRecordApi(
   collectionId: string,
   recordId: string,

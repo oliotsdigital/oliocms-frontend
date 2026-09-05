@@ -10,6 +10,7 @@ import {
   createCollectionRecordApi,
 } from "@/api/collection.api";
 import { DynamicFormModal } from "@/components/collections/DynamicFormModal";
+import { ImportDataModal } from "@/components/collections/ImportDataModal";
 import { DynamicDataTable } from "@/components/collections/DynamicDataTable";
 import { useOlio } from "@/state/OlioProvider";
 
@@ -25,6 +26,7 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
   const [search, setSearch] = useState("");
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   const loadData = useCallback(async (signal?: { cancelled: boolean }) => {
     if (!collectionId) return;
@@ -72,31 +74,6 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
     if (toast) toast.showToast(`Exported ${records.length} records successfully!`, "success");
   };
 
-  const handleImportFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !schema) return;
-
-    try {
-      const text = await file.text();
-      const parsed = JSON.parse(text);
-      const itemsToImport = Array.isArray(parsed) ? parsed : [parsed];
-
-      let count = 0;
-      for (const item of itemsToImport) {
-        if (typeof item === "object" && item !== null) {
-          await createCollectionRecordApi(schema.id, item);
-          count++;
-        }
-      }
-
-      if (toast) toast.showToast(`Imported ${count} records successfully!`, "success");
-      loadData();
-    } catch (err) {
-      if (toast) toast.showToast("Failed to parse JSON file for import", "error");
-    } finally {
-      e.target.value = "";
-    }
-  };
 
   return (
     <AppLayout pageTitle={schema ? schema.name : "Collection Details"}>
@@ -137,21 +114,13 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
 
             {/* Action Buttons */}
             <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
-              <input
-                type="file"
-                id="import-json-file"
-                accept=".json"
-                onChange={handleImportFileChange}
-                className="hidden"
-              />
-
-              <label
-                htmlFor="import-json-file"
-                className="cursor-pointer px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 transition text-xs font-bold flex items-center gap-1.5"
-                title="Import JSON Data"
+              <button
+                onClick={() => setIsImportModalOpen(true)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 transition text-xs font-bold flex items-center gap-1.5"
+                title="Import Records from Excel (.xlsx, .xls) or CSV"
               >
                 <i className="fa-solid fa-file-import text-xs"></i> Import Data
-              </label>
+              </button>
 
               <Link
                 href={`/collections/${schema.id}/apis`}
@@ -211,6 +180,14 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
             <DynamicFormModal
               isOpen={isAddModalOpen}
               onClose={() => setIsAddModalOpen(false)}
+              schema={schema}
+              onSuccess={() => loadData()}
+            />
+
+            {/* Import Data Modal (XLSX / CSV Column Mapping) */}
+            <ImportDataModal
+              isOpen={isImportModalOpen}
+              onClose={() => setIsImportModalOpen(false)}
               schema={schema}
               onSuccess={() => loadData()}
             />

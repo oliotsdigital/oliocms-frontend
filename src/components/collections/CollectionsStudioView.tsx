@@ -8,6 +8,10 @@ import { useSearchParams } from "next/navigation";
 import { SchemaBuilderModal, AVAILABLE_ICONS } from "./SchemaBuilderModal";
 import { AddFieldModal } from "./AddFieldModal";
 import { SelectIconModal } from "./SelectIconModal";
+import {
+  SelectEnumerationCollectionModal,
+  EnumerationConfirmData,
+} from "./SelectEnumerationCollectionModal";
 import { useOlio } from "@/state/OlioProvider";
 import { resolveMediaUrl } from "@/utils/media";
 
@@ -157,6 +161,8 @@ export const CollectionsStudioView: React.FC = () => {
   const [editingCollectionForModal, setEditingCollectionForModal] = useState<CollectionSchema | null>(null);
   const [isAddFieldModalOpen, setIsAddFieldModalOpen] = useState(false);
   const [isIconModalOpen, setIsIconModalOpen] = useState(false);
+  const [isEnumerationModalOpen, setIsEnumerationModalOpen] = useState(false);
+  const [enumerationModalTargetIndex, setEnumerationModalTargetIndex] = useState<number | null>(null);
 
   // Edit states for right-hand section
   const [editingName, setEditingName] = useState("");
@@ -262,6 +268,11 @@ export const CollectionsStudioView: React.FC = () => {
 
   // Property Handlers for Schema Definition Editor
   const handleSelectFieldTypeFromModal = (type: FieldType, title: string) => {
+    if (type === "enumeration") {
+      setEnumerationModalTargetIndex(null);
+      setIsEnumerationModalOpen(true);
+      return;
+    }
     const nextNum = editingFields.length + 1;
     const cleanTypeKey = type.toLowerCase().replace(/[^a-z0-9]/g, "");
     const newField: FieldDefinition = {
@@ -271,6 +282,51 @@ export const CollectionsStudioView: React.FC = () => {
       validation: { required: false, unique: false },
     };
     setEditingFields([...editingFields, newField]);
+  };
+
+  const handleConfirmEnumeration = (data: EnumerationConfirmData) => {
+    if (enumerationModalTargetIndex !== null && enumerationModalTargetIndex >= 0) {
+      // Editing existing field
+      const updated = [...editingFields];
+      const target = updated[enumerationModalTargetIndex];
+      if (target) {
+        target.type = "enumeration";
+        target.name = data.key;
+        target.label = data.label;
+        target.validation = {
+          ...(target.validation || {}),
+          required: data.required,
+          target_collection_id: data.collection.id,
+        };
+        setEditingFields(updated);
+        if (toast) {
+          toast.showToast(
+            `Updated "${data.label}" linked to collection "${data.collection.name}"`,
+            "success"
+          );
+        }
+      }
+    } else {
+      // Adding new enumeration field
+      const newField: FieldDefinition = {
+        name: data.key,
+        label: data.label,
+        type: "enumeration",
+        validation: {
+          required: data.required,
+          unique: false,
+          target_collection_id: data.collection.id,
+        },
+      };
+      setEditingFields([...editingFields, newField]);
+      if (toast) {
+        toast.showToast(
+          `Added Enumeration property linked to "${data.collection.name}"`,
+          "success"
+        );
+      }
+    }
+    setEnumerationModalTargetIndex(null);
   };
 
   const handleRemoveProperty = (index: number) => {
@@ -292,6 +348,13 @@ export const CollectionsStudioView: React.FC = () => {
       // Key, label, and type cannot be modified for mandatory fields
       return;
     }
+
+    if (key === "type" && value === "enumeration") {
+      setEnumerationModalTargetIndex(index);
+      setIsEnumerationModalOpen(true);
+      return;
+    }
+
     const updated = [...editingFields];
     if (key === "name") {
       updated[index].name = value.toLowerCase().replace(/[^a-z0-9_]/g, "");
@@ -502,153 +565,202 @@ export const CollectionsStudioView: React.FC = () => {
                     return (
                       <div
                         key={idx}
-                        className={`p-4 rounded-2xl border transition-all flex flex-col md:flex-row md:items-center gap-4 ${
+                        className={`p-4 rounded-2xl border transition-all flex flex-col gap-3 ${
                           isMandatory
                             ? "bg-slate-50/90 dark:bg-slate-800/60 border-brand-500/30"
                             : "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800/80 hover:border-brand-500/40"
                         }`}
                       >
-                        {/* Property Key */}
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                              Key (snake_case)
+                        <div className="flex flex-col md:flex-row md:items-center gap-4">
+                          {/* Property Key */}
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                Key (snake_case)
+                              </label>
+                              {isMandatory && (
+                                <span className="px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-500 border border-brand-500/20 text-[9px] font-bold inline-flex items-center gap-1">
+                                  <i className="fa-solid fa-lock text-[8px]"></i> Mandatory
+                                </span>
+                              )}
+                            </div>
+                            <input
+                              type="text"
+                              required
+                              disabled={isMandatory}
+                              value={field.name}
+                              onChange={(e) => handleFieldChange(idx, "name", e.target.value)}
+                              placeholder="property_key"
+                              className={`w-full px-3 py-2 rounded-xl border text-xs font-mono focus:outline-none transition ${
+                                isMandatory
+                                  ? "bg-slate-100 dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                                  : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                              }`}
+                            />
+                          </div>
+
+                          {/* Display Label */}
+                          <div className="flex-1">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                              Display Label
                             </label>
-                            {isMandatory && (
-                              <span className="px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-500 border border-brand-500/20 text-[9px] font-bold inline-flex items-center gap-1">
-                                <i className="fa-solid fa-lock text-[8px]"></i> Mandatory
+                            <input
+                              type="text"
+                              disabled={isMandatory}
+                              value={field.label || ""}
+                              onChange={(e) => handleFieldChange(idx, "label", e.target.value)}
+                              placeholder="Display Label"
+                              className={`w-full px-3 py-2 rounded-xl border text-xs font-medium focus:outline-none transition ${
+                                isMandatory
+                                  ? "bg-slate-100 dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                                  : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                              }`}
+                            />
+                          </div>
+
+                          {/* Property Type */}
+                          <div className="w-full md:w-44">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                              Property Type
+                            </label>
+                            <select
+                              disabled={isMandatory}
+                              value={field.type}
+                              onChange={(e) => handleFieldChange(idx, "type", e.target.value as FieldType)}
+                              className={`w-full px-3 py-2 rounded-xl border text-xs font-medium focus:outline-none transition ${
+                                isMandatory
+                                  ? "bg-slate-100 dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                                  : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                              }`}
+                            >
+                              <option value="string">Text (String)</option>
+                              <option value="number">Number</option>
+                              <option value="boolean">Boolean (Switch)</option>
+                              <option value="richtext">Rich text (Blocks)</option>
+                              <option value="markdown">Rich text (Markdown)</option>
+                              <option value="json">JSON</option>
+                              <option value="email">Email</option>
+                              <option value="date">Date</option>
+                              <option value="password">Password</option>
+                              <option value="media">Media</option>
+                              <option value="enumeration">Enumeration</option>
+                              <option value="relation">Relation ID</option>
+                              <option value="uid">UID</option>
+                              <option value="component">Component</option>
+                              <option value="dynamiczone">Dynamic zone</option>
+                            </select>
+                          </div>
+
+                          {/* Validation Toggles & Delete */}
+                          <div className="flex items-center justify-between md:justify-end gap-4 pt-2 md:pt-5 border-t md:border-t-0 border-slate-200 dark:border-slate-800">
+                            <label
+                              className={`flex items-center gap-1.5 text-xs font-bold ${
+                                isSlug
+                                  ? "text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                                  : "cursor-pointer text-slate-700 dark:text-slate-300"
+                              }`}
+                              title={isSlug ? "Slug is strictly required and non-editable" : undefined}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSlug ? true : !!field.validation?.required}
+                                disabled={isSlug}
+                                onChange={() => handleValidationToggle(idx, "required")}
+                                className={`rounded border-slate-300 text-brand-500 focus:ring-brand-500 ${
+                                  isSlug ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                                }`}
+                              />
+                              Required
+                            </label>
+
+                            <label
+                              className={`flex items-center gap-1.5 text-xs font-bold ${
+                                isSlug
+                                  ? "text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                                  : "cursor-pointer text-slate-700 dark:text-slate-300"
+                              }`}
+                              title={isSlug ? "Slug is strictly unique and non-editable" : undefined}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSlug ? true : !!field.validation?.unique}
+                                disabled={isSlug}
+                                onChange={() => handleValidationToggle(idx, "unique")}
+                                className={`rounded border-slate-300 text-brand-500 focus:ring-brand-500 ${
+                                  isSlug ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                                }`}
+                              />
+                              Unique
+                            </label>
+
+                            {isMandatory ? (
+                              <span
+                                className="p-2 text-slate-400 dark:text-slate-500 text-xs flex items-center justify-center cursor-not-allowed"
+                                title="Mandatory fields cannot be deleted"
+                              >
+                                <i className="fa-solid fa-lock text-xs"></i>
                               </span>
+                            ) : (
+                              editingFields.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveProperty(idx)}
+                                  className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition"
+                                  title="Remove Property"
+                                >
+                                  <i className="fa-solid fa-trash-can text-xs"></i>
+                                </button>
+                              )
                             )}
                           </div>
-                          <input
-                            type="text"
-                            required
-                            disabled={isMandatory}
-                            value={field.name}
-                            onChange={(e) => handleFieldChange(idx, "name", e.target.value)}
-                            placeholder="property_key"
-                            className={`w-full px-3 py-2 rounded-xl border text-xs font-mono focus:outline-none transition ${
-                              isMandatory
-                                ? "bg-slate-100 dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
-                            }`}
-                          />
                         </div>
 
-                        {/* Display Label */}
-                        <div className="flex-1">
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                            Display Label
-                          </label>
-                          <input
-                            type="text"
-                            disabled={isMandatory}
-                            value={field.label || ""}
-                            onChange={(e) => handleFieldChange(idx, "label", e.target.value)}
-                            placeholder="Display Label"
-                            className={`w-full px-3 py-2 rounded-xl border text-xs font-medium focus:outline-none transition ${
-                              isMandatory
-                                ? "bg-slate-100 dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
-                            }`}
-                          />
-                        </div>
-
-                        {/* Property Type */}
-                        <div className="w-full md:w-44">
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                            Property Type
-                          </label>
-                          <select
-                            disabled={isMandatory}
-                            value={field.type}
-                            onChange={(e) => handleFieldChange(idx, "type", e.target.value as FieldType)}
-                            className={`w-full px-3 py-2 rounded-xl border text-xs font-medium focus:outline-none transition ${
-                              isMandatory
-                                ? "bg-slate-100 dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
-                            }`}
-                          >
-                            <option value="string">Text (String)</option>
-                            <option value="number">Number</option>
-                            <option value="boolean">Boolean (Switch)</option>
-                            <option value="richtext">Rich text (Blocks)</option>
-                            <option value="markdown">Rich text (Markdown)</option>
-                            <option value="json">JSON</option>
-                            <option value="email">Email</option>
-                            <option value="date">Date</option>
-                            <option value="password">Password</option>
-                            <option value="media">Media</option>
-                            <option value="enumeration">Enumeration</option>
-                            <option value="relation">Relation ID</option>
-                            <option value="uid">UID</option>
-                            <option value="component">Component</option>
-                            <option value="dynamiczone">Dynamic zone</option>
-                          </select>
-                        </div>
-
-                        {/* Validation Toggles & Delete */}
-                        <div className="flex items-center justify-between md:justify-end gap-4 pt-2 md:pt-5 border-t md:border-t-0 border-slate-200 dark:border-slate-800">
-                          <label
-                            className={`flex items-center gap-1.5 text-xs font-bold ${
-                              isSlug
-                                ? "text-slate-400 dark:text-slate-500 cursor-not-allowed"
-                                : "cursor-pointer text-slate-700 dark:text-slate-300"
-                            }`}
-                            title={isSlug ? "Slug is strictly required and non-editable" : undefined}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSlug ? true : !!field.validation?.required}
-                              disabled={isSlug}
-                              onChange={() => handleValidationToggle(idx, "required")}
-                              className={`rounded border-slate-300 text-brand-500 focus:ring-brand-500 ${
-                                isSlug ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-                              }`}
-                            />
-                            Required
-                          </label>
-
-                          <label
-                            className={`flex items-center gap-1.5 text-xs font-bold ${
-                              isSlug
-                                ? "text-slate-400 dark:text-slate-500 cursor-not-allowed"
-                                : "cursor-pointer text-slate-700 dark:text-slate-300"
-                            }`}
-                            title={isSlug ? "Slug is strictly unique and non-editable" : undefined}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSlug ? true : !!field.validation?.unique}
-                              disabled={isSlug}
-                              onChange={() => handleValidationToggle(idx, "unique")}
-                              className={`rounded border-slate-300 text-brand-500 focus:ring-brand-500 ${
-                                isSlug ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-                              }`}
-                            />
-                            Unique
-                          </label>
-
-                          {isMandatory ? (
-                            <span
-                              className="p-2 text-slate-400 dark:text-slate-500 text-xs flex items-center justify-center cursor-not-allowed"
-                              title="Mandatory fields cannot be deleted"
+                        {/* Enumeration Target Collection Info Banner */}
+                        {field.type === "enumeration" && (
+                          <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/25 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xs shrink-0">
+                                <i className="fa-solid fa-layer-group"></i>
+                              </span>
+                              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                Target Collection:
+                              </span>
+                              {(() => {
+                                const linked = collections.find(
+                                  (c) => c.id === field.validation?.target_collection_id
+                                );
+                                if (linked) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-purple-500/15 text-purple-700 dark:text-purple-300 font-bold text-xs truncate">
+                                      <i className={`fa-solid ${linked.icon || "fa-cube"} text-[10px]`}></i>
+                                      <span>{linked.name}</span>
+                                      <span className="font-mono text-[10px] opacity-70">
+                                        (/{linked.slug})
+                                      </span>
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium text-xs">
+                                    <i className="fa-solid fa-triangle-exclamation text-[10px]"></i>
+                                    No collection selected
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEnumerationModalTargetIndex(idx);
+                                setIsEnumerationModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] shadow-sm transition flex items-center gap-1"
                             >
-                              <i className="fa-solid fa-lock text-xs"></i>
-                            </span>
-                          ) : (
-                            editingFields.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveProperty(idx)}
-                                className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition"
-                                title="Remove Property"
-                              >
-                                <i className="fa-solid fa-trash-can text-xs"></i>
-                              </button>
-                            )
-                          )}
-                        </div>
+                              <i className="fa-solid fa-pen-to-square text-[10px]"></i>
+                              <span>Change Collection</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -721,6 +833,39 @@ export const CollectionsStudioView: React.FC = () => {
         isOpen={isAddFieldModalOpen}
         onClose={() => setIsAddFieldModalOpen(false)}
         onSelectFieldType={handleSelectFieldTypeFromModal}
+      />
+
+      {/* Enumeration Collection Selection Popup Modal */}
+      <SelectEnumerationCollectionModal
+        isOpen={isEnumerationModalOpen}
+        onClose={() => {
+          setIsEnumerationModalOpen(false);
+          setEnumerationModalTargetIndex(null);
+        }}
+        collections={collections}
+        onConfirm={handleConfirmEnumeration}
+        initialSelectedCollectionId={
+          enumerationModalTargetIndex !== null && editingFields[enumerationModalTargetIndex]
+            ? editingFields[enumerationModalTargetIndex].validation?.target_collection_id || ""
+            : ""
+        }
+        initialKey={
+          enumerationModalTargetIndex !== null && editingFields[enumerationModalTargetIndex]
+            ? editingFields[enumerationModalTargetIndex].name
+            : ""
+        }
+        initialLabel={
+          enumerationModalTargetIndex !== null && editingFields[enumerationModalTargetIndex]
+            ? editingFields[enumerationModalTargetIndex].label || ""
+            : ""
+        }
+        initialRequired={
+          enumerationModalTargetIndex !== null && editingFields[enumerationModalTargetIndex]
+            ? !!editingFields[enumerationModalTargetIndex].validation?.required
+            : false
+        }
+        isEditingExisting={enumerationModalTargetIndex !== null}
+        existingKeys={editingFields.map((f) => f.name)}
       />
 
       {/* Icon Picker Popup Modal */}

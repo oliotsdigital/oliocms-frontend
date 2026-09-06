@@ -5,6 +5,7 @@ import { useForm, Controller } from "react-hook-form";
 import { CollectionRecord, CollectionSchema } from "@/models/collection.model";
 import { updateCollectionRecordApi } from "@/api/collection.api";
 import { MediaFieldInput } from "./MediaFieldInput";
+import { EnumerationFieldInput } from "./EnumerationFieldInput";
 import { useOlio } from "@/state/OlioProvider";
 
 interface EditRecordModalProps {
@@ -216,6 +217,23 @@ export const EditRecordModal: React.FC<EditRecordModalProps> = ({
                     }}
                     render={({ field: { value, onChange } }) => (
                       <MediaFieldInput
+                        field={field}
+                        value={value}
+                        onChange={onChange}
+                        projectId={schema.project_id}
+                        disabled={submitting}
+                      />
+                    )}
+                  />
+                ) : field.type === "enumeration" ? (
+                  <Controller
+                    name={field.name}
+                    control={control}
+                    rules={{
+                      required: field.validation?.required ? `${field.label || field.name} is required` : false,
+                    }}
+                    render={({ field: { value, onChange } }) => (
+                      <EnumerationFieldInput
                         field={field}
                         value={value}
                         onChange={onChange}

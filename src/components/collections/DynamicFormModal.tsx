@@ -7,6 +7,7 @@ import * as z from "zod";
 import { CollectionSchema } from "@/models/collection.model";
 import { createCollectionRecordApi } from "@/api/collection.api";
 import { MediaFieldInput } from "./MediaFieldInput";
+import { EnumerationFieldInput } from "./EnumerationFieldInput";
 
 interface DynamicFormModalProps {
   isOpen: boolean;
@@ -36,7 +37,8 @@ export const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
         field.type === "relation" ||
         field.type === "media" ||
         field.type === "uid" ||
-        field.type === "email"
+        field.type === "email" ||
+        field.type === "enumeration"
       ) {
         let strSchema = z.string();
         if (isRequired) {
@@ -229,6 +231,20 @@ export const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
                     control={control}
                     render={({ field: { value, onChange } }) => (
                       <MediaFieldInput
+                        field={field}
+                        value={value}
+                        onChange={onChange}
+                        projectId={schema.project_id}
+                        disabled={submitting}
+                      />
+                    )}
+                  />
+                ) : field.type === "enumeration" ? (
+                  <Controller
+                    name={field.name}
+                    control={control}
+                    render={({ field: { value, onChange } }) => (
+                      <EnumerationFieldInput
                         field={field}
                         value={value}
                         onChange={onChange}

@@ -9,6 +9,7 @@ import { fetchCollectionSchemaApi, createCollectionRecordApi } from "@/api/colle
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useOlio } from "@/state/OlioProvider";
 import { MediaFieldInput } from "./MediaFieldInput";
+import { EnumerationFieldInput } from "./EnumerationFieldInput";
 
 interface AddRecordViewProps {
   collectionId: string;
@@ -260,6 +261,23 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
                             }}
                             render={({ field: { value, onChange } }) => (
                               <MediaFieldInput
+                                field={field}
+                                value={value}
+                                onChange={onChange}
+                                projectId={schema.project_id}
+                                disabled={submitting}
+                              />
+                            )}
+                          />
+                        ) : field.type === "enumeration" ? (
+                          <Controller
+                            name={field.name}
+                            control={control}
+                            rules={{
+                              required: field.validation?.required ? `${field.label || field.name} is required` : false,
+                            }}
+                            render={({ field: { value, onChange } }) => (
+                              <EnumerationFieldInput
                                 field={field}
                                 value={value}
                                 onChange={onChange}

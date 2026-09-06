@@ -10,6 +10,8 @@ import { useOlio } from "@/state/OlioProvider";
 interface DynamicDataTableProps {
   schema: CollectionSchema;
   records: CollectionRecord[];
+  search?: string;
+  onSearchChange?: (val: string) => void;
   onRefresh: () => void;
   onFilterChange?: (filters: Record<string, string>) => void;
 }
@@ -24,6 +26,8 @@ interface DisplayColumn {
 export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
   schema,
   records,
+  search,
+  onSearchChange,
   onRefresh,
   onFilterChange,
 }) => {
@@ -264,7 +268,30 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
           return null;
         })}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2.5">
+          {onSearchChange && (
+            <div className="relative w-44 sm:w-60">
+              <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+              <input
+                type="text"
+                value={search || ""}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder={`Search ${schema.name} records...`}
+                className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => onSearchChange("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                  title="Clear search"
+                >
+                  <i className="fa-solid fa-xmark text-xs"></i>
+                </button>
+              )}
+            </div>
+          )}
+
           {optionalColumns.length > 0 && (
             <div className="relative" ref={columnsMenuRef}>
               <button

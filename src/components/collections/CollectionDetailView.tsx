@@ -192,70 +192,55 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
           )}
         </div>
 
-        {/* Top Header Action Container with Search Bar & Buttons */}
+        {/* Top Header Action Buttons Row */}
         {schema && (
-          <div className="glass-panel rounded-2xl p-4 border border-slate-200/50 dark:border-slate-800/50 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
-            {/* Search Input Bar */}
-            <div className="relative flex-1 max-w-md w-full">
-              <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder={`Search ${schema.name} records...`}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-              />
-            </div>
+          <div className="flex flex-wrap items-center justify-end gap-2.5">
+            <Link
+              href={`/collections/${schema.id}/apis`}
+              className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
+              title="View & test public REST APIs for this collection"
+            >
+              <i className="fa-solid fa-code text-xs text-brand-500"></i> Get APIs
+            </Link>
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
-              <Link
-                href={`/collections/${schema.id}/apis`}
-                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
-                title="View & test public REST APIs for this collection"
-              >
-                <i className="fa-solid fa-code text-xs text-brand-500"></i> Get APIs
-              </Link>
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
+              title="Import Records from Excel (.xlsx, .xls) or CSV"
+            >
+              <i className="fa-solid fa-file-import text-xs text-brand-500"></i> Import Data
+            </button>
 
-              <button
-                onClick={() => setIsImportModalOpen(true)}
-                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 transition text-xs font-bold flex items-center gap-1.5"
-                title="Import Records from Excel (.xlsx, .xls) or CSV"
-              >
-                <i className="fa-solid fa-file-import text-xs"></i> Import Data
-              </button>
+            <button
+              onClick={handleExportData}
+              className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
+              title="Export Collection Records as Excel (.xlsx)"
+            >
+              <i className="fa-solid fa-file-excel text-xs text-brand-500"></i> Export Data (.xlsx)
+            </button>
 
-              <button
-                onClick={handleExportData}
-                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 transition text-xs font-bold flex items-center gap-1.5"
-                title="Export Collection Records as Excel (.xlsx)"
-              >
-                <i className="fa-solid fa-file-excel text-xs text-emerald-500"></i> Export Data (.xlsx)
-              </button>
+            <Link
+              href={`/collections?id=${schema.id}`}
+              className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
+              title="Edit Collection Schema & Fields"
+            >
+              <i className="fa-solid fa-pen-to-square text-xs text-brand-500"></i> Edit Collection
+            </Link>
 
-              <Link
-                href={`/collections?id=${schema.id}`}
-                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 transition text-xs font-bold flex items-center gap-1.5"
-                title="Edit Collection Schema & Fields"
-              >
-                <i className="fa-solid fa-pen-to-square text-xs"></i> Edit Collection
-              </Link>
+            <button
+              onClick={() => loadData()}
+              className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
+              title="Refresh Records"
+            >
+              <i className="fa-solid fa-arrows-rotate text-xs text-brand-500"></i> Refresh
+            </button>
 
-              <button
-                onClick={() => loadData()}
-                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-brand-500 transition text-xs font-bold flex items-center gap-1.5"
-                title="Refresh Records"
-              >
-                <i className="fa-solid fa-arrows-rotate text-xs"></i> Refresh
-              </button>
-
-              <Link
-                href={`/collections/${schema.id}/add-record`}
-                className="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition transform active:scale-95 flex items-center gap-2 shrink-0"
-              >
-                <i className="fa-solid fa-plus text-xs"></i> Add {schema.name}
-              </Link>
-            </div>
+            <Link
+              href={`/collections/${schema.id}/add-record`}
+              className="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition transform active:scale-95 flex items-center gap-2 shrink-0"
+            >
+              <i className="fa-solid fa-plus text-xs"></i> Add {schema.name}
+            </Link>
           </div>
         )}
 
@@ -267,6 +252,8 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
             <DynamicDataTable
               schema={schema}
               records={records}
+              search={search}
+              onSearchChange={handleSearchChange}
               onRefresh={() => loadData()}
               onFilterChange={handleFilterChange}
             />

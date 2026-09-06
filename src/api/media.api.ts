@@ -139,6 +139,73 @@ export async function uploadMediaApi(
   };
 }
 
+export interface ZipUploadResult {
+  success: boolean;
+  message: string;
+  total_extracted: number;
+  files: MediaItem[];
+}
+
+/**
+ * Upload a ZIP archive to /storage/upload-zip. The server extracts all files in-memory
+ * and stores each extracted file in Cloudflare R2 under /{CLOUDFLARE_R2_FOLDER_PREFIX}/{tenant_id}/{project_id}/.
+ */
+export async function uploadZipMediaApi(
+  file: File,
+  projectId?: string
+): Promise<ZipUploadResult> {
+  const selectedProjId = projectId || getSelectedProjectId();
+  const headers = { ...getCollectionHeaders(selectedProjId || undefined) };
+  delete headers["Content-Type"];
+
+  const formData = new FormData();
+  formData.append("file", file);
+  if (selectedProjId) {
+    formData.append("project_id", selectedProjId);
+  }
+
+  const url = `${APP_CONFIG.apiBaseUrl}/storage/upload-zip`;
+  const res = await apiFetch(url, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    const errMsg =
+      errorData.detail ||
+      errorData.message ||
+      "Failed to extract and upload ZIP archive to Cloudflare R2";
+    throw new Error(errMsg);
+  }
+
+  const data = await res.json();
+  const files: MediaItem[] = (data.files || []).map((item: any) => {
+    const filename = item.filename || "file";
+    const ext = filename.includes(".")
+      ? filename.split(".").pop()?.toLowerCase() || "file"
+      : "file";
+    return {
+      id: item.key || item.path || filename,
+      key: item.key,
+      path: item.path,
+      name: filename,
+      url: resolveItemUrl(item),
+      size: formatBytes(item.size || 0),
+      format: ext,
+      lastModified: item.uploaded_at,
+    };
+  });
+
+  return {
+    success: Boolean(data.success),
+    message: data.message || `Successfully extracted ${files.length} files`,
+    total_extracted: data.total_extracted ?? files.length,
+    files,
+  };
+}
+
 /**
  * Delete a media file from Cloudflare R2.
  */

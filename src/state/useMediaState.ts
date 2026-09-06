@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { MediaItem, NewMediaForm } from "@/models/media.model";
-import { fetchMediaApi, uploadMediaApi, deleteMediaApi } from "@/api/media.api";
+import { fetchMediaApi, uploadMediaApi, uploadZipMediaApi, deleteMediaApi } from "@/api/media.api";
 
 export function useMediaState(
   showToast?: (msg: string, type?: "success" | "info" | "error") => void,
@@ -61,12 +61,36 @@ export function useMediaState(
 
     setIsUploading(true);
     try {
-      const uploaded = await uploadMediaApi(newMedia.file || newMedia, selectedProjectId);
-      if (uploaded) {
-        setMediaList((prev) => [uploaded, ...prev]);
-        setNewMedia({ name: "", url: "", file: null });
-        setShowMediaModal(false);
-        if (showToast) showToast("Media asset uploaded to Cloudflare R2!", "success");
+      const isZip =
+        newMedia.file &&
+        (newMedia.file.name.toLowerCase().endsWith(".zip") ||
+          newMedia.file.type.includes("zip"));
+
+      if (isZip && newMedia.file) {
+        const result = await uploadZipMediaApi(newMedia.file, selectedProjectId);
+        if (result && result.files.length > 0) {
+          setMediaList((prev) => [...result.files, ...prev]);
+          setNewMedia({ name: "", url: "", file: null });
+          setShowMediaModal(false);
+          if (showToast) {
+            showToast(
+              `Extracted and uploaded ${result.total_extracted} files to Cloudflare R2!`,
+              "success"
+            );
+          }
+        } else {
+          if (showToast) {
+            showToast("ZIP archive extracted, but no valid files were stored", "info");
+          }
+        }
+      } else {
+        const uploaded = await uploadMediaApi(newMedia.file || newMedia, selectedProjectId);
+        if (uploaded) {
+          setMediaList((prev) => [uploaded, ...prev]);
+          setNewMedia({ name: "", url: "", file: null });
+          setShowMediaModal(false);
+          if (showToast) showToast("Media asset uploaded to Cloudflare R2!", "success");
+        }
       }
     } catch (err: any) {
       if (showToast) showToast(err?.message || "Failed to upload media asset", "error");
@@ -78,6 +102,24 @@ export function useMediaState(
   const uploadDirectFile = async (file: File) => {
     setIsUploading(true);
     try {
+      const isZip =
+        file.name.toLowerCase().endsWith(".zip") || file.type.includes("zip");
+
+      if (isZip) {
+        const result = await uploadZipMediaApi(file, selectedProjectId);
+        if (result && result.files.length > 0) {
+          setMediaList((prev) => [...result.files, ...prev]);
+          if (showToast) {
+            showToast(
+              `Extracted and uploaded ${result.total_extracted} files from "${file.name}" to Cloudflare R2!`,
+              "success"
+            );
+          }
+          return result.files[0];
+        }
+        return null;
+      }
+
       const uploaded = await uploadMediaApi(file, selectedProjectId);
       if (uploaded) {
         setMediaList((prev) => [uploaded, ...prev]);

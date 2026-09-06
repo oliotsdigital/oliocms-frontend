@@ -27,10 +27,20 @@ export const MediaUploadModal: React.FC<MediaUploadModalProps> = ({
 
   if (!isOpen) return null;
 
+  const isZip = Boolean(
+    newMedia.file &&
+      (newMedia.file.name.toLowerCase().endsWith(".zip") ||
+        newMedia.file.type.includes("zip"))
+  );
+
   const handleFileChange = (file: File | null) => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+
     if (!file) {
       onFormChange({ file: null });
-      setPreviewUrl(null);
       return;
     }
 
@@ -39,9 +49,13 @@ export const MediaUploadModal: React.FC<MediaUploadModalProps> = ({
       name: newMedia.name || file.name.replace(/\.[^/.]+$/, ""),
     });
 
-    // Create object URL for preview
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
+    // Only create image preview URL if not a ZIP archive
+    const isArchive =
+      file.name.toLowerCase().endsWith(".zip") || file.type.includes("zip");
+    if (!isArchive) {
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -111,7 +125,7 @@ export const MediaUploadModal: React.FC<MediaUploadModalProps> = ({
             }`}
           >
             <i className="fa-solid fa-file-arrow-up mr-1.5 text-[10px]"></i>
-            Upload File
+            Upload File / ZIP
           </button>
           <button
             type="button"
@@ -132,7 +146,7 @@ export const MediaUploadModal: React.FC<MediaUploadModalProps> = ({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/*,.zip,application/zip,application/x-zip-compressed"
               className="hidden"
               onChange={(e) => {
                 if (e.target.files && e.target.files[0]) {
@@ -141,29 +155,89 @@ export const MediaUploadModal: React.FC<MediaUploadModalProps> = ({
               }}
             />
 
-            {previewUrl && newMedia.file ? (
-              <div className="relative rounded-xl overflow-hidden bg-slate-900/40 border border-brand-500/30 p-2 flex items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={previewUrl}
-                  alt="Upload preview"
-                  className="w-14 h-14 object-cover rounded-lg"
-                />
-                <div className="flex-1 min-w-0 text-xs">
-                  <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">{newMedia.file.name}</p>
-                  <p className="text-[10px] text-slate-400">
-                    {(newMedia.file.size / 1024).toFixed(1)} KB
-                  </p>
+            {newMedia.file ? (
+              isZip ? (
+                <div className="relative rounded-xl overflow-hidden bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/30 p-3.5 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center text-xl flex-shrink-0">
+                      <i className="fa-solid fa-file-zipper"></i>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-xs text-slate-900 dark:text-slate-100 truncate">
+                          {newMedia.file.name}
+                        </p>
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 uppercase tracking-wider flex-shrink-0">
+                          ZIP
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        {(newMedia.file.size / (1024 * 1024)).toFixed(2)} MB Archive
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleFileChange(null)}
+                      className="w-7 h-7 rounded-lg text-rose-500 hover:bg-rose-500/10 flex items-center justify-center transition"
+                      title="Remove archive"
+                    >
+                      <i className="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                  </div>
+                  <div className="p-2 rounded-lg bg-white/60 dark:bg-slate-900/40 border border-amber-500/20 text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
+                    <div className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+                      <i className="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
+                      <span>Automatic Cloudflare R2 Extraction</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Files are extracted in-memory and uploaded directly into your project's Cloudflare R2 folder. OS junk files (__MACOSX, .DS_Store) are automatically skipped.
+                    </p>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleFileChange(null)}
-                  className="w-7 h-7 rounded-lg text-rose-500 hover:bg-rose-500/10 flex items-center justify-center transition"
-                  title="Remove file"
-                >
-                  <i className="fa-solid fa-trash-can text-xs"></i>
-                </button>
-              </div>
+              ) : previewUrl ? (
+                <div className="relative rounded-xl overflow-hidden bg-slate-900/40 border border-brand-500/30 p-2 flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={previewUrl}
+                    alt="Upload preview"
+                    className="w-14 h-14 object-cover rounded-lg"
+                  />
+                  <div className="flex-1 min-w-0 text-xs">
+                    <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">{newMedia.file.name}</p>
+                    <p className="text-[10px] text-slate-400">
+                      {(newMedia.file.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleFileChange(null)}
+                    className="w-7 h-7 rounded-lg text-rose-500 hover:bg-rose-500/10 flex items-center justify-center transition"
+                    title="Remove file"
+                  >
+                    <i className="fa-solid fa-trash-can text-xs"></i>
+                  </button>
+                </div>
+              ) : (
+                <div className="relative rounded-xl overflow-hidden bg-slate-900/40 border border-brand-500/30 p-2 flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-brand-500/10 text-brand-500 flex items-center justify-center">
+                    <i className="fa-solid fa-file text-sm"></i>
+                  </div>
+                  <div className="flex-1 min-w-0 text-xs">
+                    <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">{newMedia.file.name}</p>
+                    <p className="text-[10px] text-slate-400">
+                      {(newMedia.file.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleFileChange(null)}
+                    className="w-7 h-7 rounded-lg text-rose-500 hover:bg-rose-500/10 flex items-center justify-center transition"
+                    title="Remove file"
+                  >
+                    <i className="fa-solid fa-trash-can text-xs"></i>
+                  </button>
+                </div>
+              )
             ) : (
               <div
                 onDragEnter={handleDrag}
@@ -178,14 +252,18 @@ export const MediaUploadModal: React.FC<MediaUploadModalProps> = ({
                 }`}
               >
                 <div className="w-10 h-10 mx-auto rounded-full bg-brand-500/10 text-brand-500 flex items-center justify-center mb-2">
-                  <i className="fa-solid fa-arrow-up-from-bracket text-sm"></i>
+                  <i className="fa-solid fa-cloud-arrow-up text-sm"></i>
                 </div>
                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Click to browse or drag and drop
                 </p>
                 <p className="text-[10px] text-slate-400 mt-0.5">
-                  PNG, JPG, WEBP, GIF or SVG up to 20MB
+                  Images (PNG, JPG, WEBP, GIF, SVG) or ZIP archives (.zip)
                 </p>
+                <div className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800/80 text-[10px] text-slate-600 dark:text-slate-300 font-medium">
+                  <i className="fa-solid fa-file-zipper text-amber-500 text-xs"></i>
+                  <span>ZIP archives will be automatically extracted to R2</span>
+                </div>
               </div>
             )}
           </div>
@@ -222,12 +300,12 @@ export const MediaUploadModal: React.FC<MediaUploadModalProps> = ({
             {isUploading ? (
               <>
                 <i className="fa-solid fa-spinner animate-spin text-xs"></i>
-                <span>Uploading...</span>
+                <span>{isZip ? "Extracting & Uploading..." : "Uploading..."}</span>
               </>
             ) : (
               <>
-                <i className="fa-solid fa-cloud-arrow-up text-xs"></i>
-                <span>Upload to R2</span>
+                <i className={`fa-solid ${isZip ? "fa-file-zipper" : "fa-cloud-arrow-up"} text-xs`}></i>
+                <span>{isZip ? "Extract & Upload to R2" : "Upload to R2"}</span>
               </>
             )}
           </button>

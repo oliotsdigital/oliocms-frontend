@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import { useOlio } from "@/state/OlioProvider";
 import { changePasswordApi } from "@/api/auth.api";
 import { deleteCurrentUserApi } from "@/api/profile.api";
+import { ContactSupportModal } from "@/components/support/ContactSupportModal";
+import { RequestFeatureModal } from "@/components/support/RequestFeatureModal";
 
 export const ProfileCard: React.FC = () => {
   const { profile, toast, auth } = useOlio();
@@ -18,6 +20,10 @@ export const ProfileCard: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [isDeletingUser, setIsDeletingUser] = useState(false);
+
+  // Support & Feedback Modal states
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [isFeatureModalOpen, setIsFeatureModalOpen] = useState(false);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -235,6 +241,73 @@ export const ProfileCard: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {/* Support & Product Feedback Card */}
+      <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-200/50 dark:border-slate-800/50 shadow-xl space-y-5">
+        <div className="flex items-center gap-3 pb-4 border-b border-slate-200/40 dark:border-slate-800/40">
+          <div className="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-500 flex items-center justify-center font-bold text-base">
+            <i className="fa-solid fa-headset"></i>
+          </div>
+          <div>
+            <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+              Support & Product Feedback
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Need assistance with your CMS or have ideas to help us improve?
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <button
+            type="button"
+            onClick={() => setIsSupportModalOpen(true)}
+            className="p-4 rounded-2xl glass-card border border-slate-200/80 dark:border-slate-800 hover:border-brand-500/50 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-all text-left flex items-start gap-3.5 group shadow-sm"
+          >
+            <div className="w-9 h-9 rounded-xl bg-brand-500/10 text-brand-500 flex items-center justify-center text-sm shrink-0 group-hover:bg-brand-500 group-hover:text-white transition-colors">
+              <i className="fa-solid fa-headset"></i>
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-brand-500 transition-colors">
+                Contact Support
+              </h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                Submit an inquiry, report a bug, or get help with schema integrations.
+              </p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsFeatureModalOpen(true)}
+            className="p-4 rounded-2xl glass-card border border-slate-200/80 dark:border-slate-800 hover:border-amber-500/50 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-all text-left flex items-start gap-3.5 group shadow-sm"
+          >
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center text-sm shrink-0 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+              <i className="fa-solid fa-lightbulb"></i>
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-amber-500 transition-colors">
+                Request Feature
+              </h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                Suggest new features, headless capabilities, or UX enhancements.
+              </p>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* Support & Feature Request Modals */}
+      <ContactSupportModal
+        isOpen={isSupportModalOpen}
+        onClose={() => setIsSupportModalOpen(false)}
+        userEmail={profile.profile.email}
+        userName={profile.profile.name}
+      />
+      <RequestFeatureModal
+        isOpen={isFeatureModalOpen}
+        onClose={() => setIsFeatureModalOpen(false)}
+      />
 
       {/* Danger Zone: Delete User Card */}
       <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-rose-500/30 dark:border-rose-500/25 bg-rose-500/[0.03] dark:bg-rose-950/[0.15] shadow-xl space-y-5">

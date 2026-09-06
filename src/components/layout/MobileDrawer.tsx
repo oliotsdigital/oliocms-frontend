@@ -11,6 +11,8 @@ interface MobileDrawerProps {
   onClose: () => void;
   onLogout: () => void;
   isFirstWebsiteModalOpen?: boolean;
+  onOpenContactSupport?: () => void;
+  onOpenRequestFeature?: () => void;
 }
 
 export const MobileDrawer: React.FC<MobileDrawerProps> = ({
@@ -18,6 +20,8 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
   onClose,
   onLogout,
   isFirstWebsiteModalOpen,
+  onOpenContactSupport,
+  onOpenRequestFeature,
 }) => {
   const pathname = usePathname();
   const { projectState, collectionsState } = useOlio();
@@ -219,21 +223,43 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
           </nav>
         </div>
 
-        {/* Profile Settings & Logout (ALWAYS ENABLED) */}
+        {/* Profile Settings & Support & Logout (ALWAYS ENABLED) */}
         <div className="pt-4 border-t border-slate-200/30 dark:border-slate-800/30 space-y-2 pointer-events-auto">
           <Link
             href="/profile-settings"
             onClick={onClose}
-            className="block w-full text-left text-xs font-medium text-slate-700 dark:text-slate-200 py-1.5"
+            className="block w-full text-left text-xs font-medium text-slate-700 dark:text-slate-200 py-1.5 hover:text-brand-500 transition"
           >
-            <i className="fa-solid fa-user-gear mr-2"></i> Profile Settings
+            <i className="fa-solid fa-user-gear mr-2 text-brand-500"></i> Profile Settings
           </Link>
           <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onOpenContactSupport?.();
+            }}
+            className="block w-full text-left text-xs font-medium text-slate-700 dark:text-slate-200 py-1.5 hover:text-brand-500 transition"
+          >
+            <i className="fa-solid fa-headset mr-2 text-brand-500"></i> Contact Support
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onOpenRequestFeature?.();
+            }}
+            className="block w-full text-left text-xs font-medium text-slate-700 dark:text-slate-200 py-1.5 hover:text-amber-500 transition"
+          >
+            <i className="fa-solid fa-lightbulb mr-2 text-amber-500"></i> Request Feature
+          </button>
+          <div className="border-t border-slate-200/30 dark:border-slate-800/30 my-1"></div>
+          <button
+            type="button"
             onClick={() => {
               onClose();
               onLogout();
             }}
-            className="w-full text-left text-xs font-medium text-rose-500 py-1.5 font-bold"
+            className="w-full text-left text-xs font-medium text-rose-500 py-1.5 font-bold hover:underline"
           >
             <i className="fa-solid fa-right-from-bracket mr-2"></i> Logout
           </button>

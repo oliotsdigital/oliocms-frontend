@@ -11,9 +11,17 @@ interface SidebarProps {
   user: UserSession | null;
   onLogout: () => void;
   isFirstWebsiteModalOpen?: boolean;
+  onOpenContactSupport?: () => void;
+  onOpenRequestFeature?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isFirstWebsiteModalOpen }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+  user,
+  onLogout,
+  isFirstWebsiteModalOpen,
+  onOpenContactSupport,
+  onOpenRequestFeature,
+}) => {
   const pathname = usePathname();
   const { collectionsState } = useOlio();
   const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(false);
@@ -228,17 +236,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isFirstWebsite
             <Link
               href="/profile-settings"
               onClick={() => setProfileMenuOpen(false)}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-brand-500 hover:text-white transition"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-brand-500 hover:text-white transition group"
             >
-              <i className="fa-solid fa-user-gear text-xs"></i>
+              <i className="fa-solid fa-user-gear text-xs text-brand-500 group-hover:text-white transition-colors"></i>
               <span>Profile Settings</span>
             </Link>
             <button
+              type="button"
+              onClick={() => {
+                setProfileMenuOpen(false);
+                onOpenContactSupport?.();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-brand-500 hover:text-white transition group text-left"
+            >
+              <i className="fa-solid fa-headset text-xs text-brand-500 group-hover:text-white transition-colors"></i>
+              <span>Contact Support</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setProfileMenuOpen(false);
+                onOpenRequestFeature?.();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-amber-500 hover:text-white transition group text-left"
+            >
+              <i className="fa-solid fa-lightbulb text-xs text-amber-500 group-hover:text-white transition-colors"></i>
+              <span>Request Feature</span>
+            </button>
+            <div className="my-1 border-t border-slate-200/60 dark:border-slate-800/60"></div>
+            <button
+              type="button"
               onClick={() => {
                 setProfileMenuOpen(false);
                 onLogout();
               }}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-rose-500 hover:bg-rose-500 hover:text-white transition"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-rose-500 hover:bg-rose-500 hover:text-white transition text-left"
             >
               <i className="fa-solid fa-arrow-right-from-bracket text-xs"></i>
               <span>Logout</span>

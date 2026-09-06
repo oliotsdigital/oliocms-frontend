@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { MenuSchema, MenuItem, MenuLocations, CreateMenuItemPayload } from "@/models/menu.model";
+import {
+  fetchMenusApi,
+  createMenuApi,
+  updateMenuApi,
+  deleteMenuApi,
+} from "@/api/menu.api";
 
 const DEFAULT_LOCATIONS: MenuLocations = {
   primary: true,
@@ -71,8 +77,8 @@ const createDefaultMenus = (projectId?: string): MenuSchema[] => [
         id: "item-6",
         label: "Blog",
         url: "/blog",
-        type: "page",
-        originalTitle: "Blog",
+        type: "collection",
+        originalTitle: "Articles",
         level: 0,
         targetBlank: false,
       },
@@ -81,7 +87,7 @@ const createDefaultMenus = (projectId?: string): MenuSchema[] => [
         label: "Contact",
         url: "/contact",
         type: "page",
-        originalTitle: "Contact",
+        originalTitle: "Contact Us",
         level: 0,
         targetBlank: false,
       },
@@ -103,30 +109,30 @@ const createDefaultMenus = (projectId?: string): MenuSchema[] => [
     },
     items: [
       {
-        id: "footer-1",
+        id: "f-1",
         label: "Privacy Policy",
-        url: "/privacy-policy",
+        url: "/privacy",
         type: "page",
-        originalTitle: "Privacy Policy",
+        originalTitle: "Privacy",
         level: 0,
         targetBlank: false,
       },
       {
-        id: "footer-2",
+        id: "f-2",
         label: "Terms of Service",
         url: "/terms",
         type: "page",
-        originalTitle: "Terms of Service",
+        originalTitle: "Terms",
         level: 0,
         targetBlank: false,
       },
       {
-        id: "footer-3",
+        id: "f-3",
         label: "Support",
-        url: "https://support.olioverse.com",
+        url: "/support",
         type: "custom",
         level: 0,
-        targetBlank: true,
+        targetBlank: false,
       },
     ],
     createdAt: new Date().toISOString(),
@@ -142,37 +148,84 @@ export function useMenuState(projectId?: string) {
   const [isDirty, setIsDirty] = useState<boolean>(false);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
-  // Load menus from storage
-  useEffect(() => {
+  // Load menus from backend API with fallback to local storage
+  const loadMenus = useCallback(async () => {
+    setIsLoaded(false);
     try {
-      const stored = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
-      let parsed: MenuSchema[] = [];
-      if (stored) {
+      let apiMenus: MenuSchema[] = [];
+      if (projectId) {
+        apiMenus = await fetchMenusApi(projectId);
+      }
+
+      if (apiMenus && apiMenus.length > 0) {
+        setMenus(apiMenus);
+        setActiveMenuId(apiMenus[0].id);
+        setActiveMenu(JSON.parse(JSON.stringify(apiMenus[0])));
         try {
-          parsed = JSON.parse(stored);
-        } catch (e) {
-          console.error("Failed to parse menus from local storage", e);
+          localStorage.setItem(storageKey, JSON.stringify(apiMenus));
+        } catch (_) {}
+      } else {
+        // If backend returned empty for this project, seed default primary navigation
+        if (projectId) {
+          try {
+            const defaultMenu = createDefaultMenus(projectId)[0];
+            const created = await createMenuApi({
+              name: defaultMenu.name,
+              slug: defaultMenu.slug,
+              autoAddPages: defaultMenu.autoAddPages,
+              locations: defaultMenu.locations,
+              items: defaultMenu.items,
+              projectId,
+            });
+            setMenus([created]);
+            setActiveMenuId(created.id);
+            setActiveMenu(created);
+            try {
+              localStorage.setItem(storageKey, JSON.stringify([created]));
+            } catch (_) {}
+            setIsDirty(false);
+            setIsLoaded(true);
+            return;
+          } catch (seedErr) {
+            console.warn("Could not seed default menu to API, falling back to local defaults:", seedErr);
+          }
         }
-      }
 
-      if (!parsed || parsed.length === 0) {
-        parsed = createDefaultMenus(projectId);
-        if (typeof window !== "undefined") {
-          localStorage.setItem(storageKey, JSON.stringify(parsed));
+        // Local storage / defaults fallback
+        const stored = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
+        let parsed: MenuSchema[] = [];
+        if (stored) {
+          try {
+            parsed = JSON.parse(stored);
+          } catch (e) {}
         }
+        if (!parsed || parsed.length === 0) {
+          parsed = createDefaultMenus(projectId);
+        }
+        setMenus(parsed);
+        setActiveMenuId(parsed[0]?.id || "");
+        setActiveMenu(parsed[0] ? JSON.parse(JSON.stringify(parsed[0])) : null);
       }
-
-      setMenus(parsed);
-      const initialActive = parsed[0]?.id || "";
-      setActiveMenuId(initialActive);
-      setActiveMenu(parsed[0] ? JSON.parse(JSON.stringify(parsed[0])) : null);
-      setIsDirty(false);
-      setIsLoaded(true);
     } catch (err) {
       console.error("Error loading menus:", err);
+      const stored = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setMenus(parsed);
+          setActiveMenuId(parsed[0]?.id || "");
+          setActiveMenu(parsed[0] || null);
+        } catch (_) {}
+      }
+    } finally {
+      setIsDirty(false);
       setIsLoaded(true);
     }
-  }, [storageKey, projectId]);
+  }, [projectId, storageKey]);
+
+  useEffect(() => {
+    loadMenus();
+  }, [loadMenus]);
 
   // Handle switching active menu
   const selectMenu = useCallback(
@@ -221,27 +274,30 @@ export function useMenuState(projectId?: string) {
     setActiveMenu((prev) => {
       if (!prev) return null;
       setIsDirty(true);
-      return { ...prev, autoAddPages: autoAdd };
+      return {
+        ...prev,
+        autoAddPages: autoAdd,
+      };
     });
   }, []);
 
-  // Add items to current menu
-  const addItemsToActiveMenu = useCallback((itemsToAdd: CreateMenuItemPayload[]) => {
-    if (!itemsToAdd.length) return;
+  // Add items to active menu
+  const addItemsToActiveMenu = useCallback((payloads: CreateMenuItemPayload[]) => {
     setActiveMenu((prev) => {
       if (!prev) return null;
-      const newItems: MenuItem[] = itemsToAdd.map((payload) => ({
-        id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        label: payload.label,
-        url: payload.url,
-        type: payload.type,
-        originalTitle: payload.originalTitle,
-        icon: payload.icon,
+      setIsDirty(true);
+
+      const newItems: MenuItem[] = payloads.map((p, index) => ({
+        id: `item-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 6)}`,
+        label: p.label,
+        url: p.url,
+        type: p.type,
+        originalTitle: p.originalTitle || p.label,
         level: 0,
         targetBlank: false,
+        icon: p.icon,
       }));
 
-      setIsDirty(true);
       return {
         ...prev,
         items: [...prev.items, ...newItems],
@@ -249,168 +305,245 @@ export function useMenuState(projectId?: string) {
     });
   }, []);
 
-  // Update specific item
-  const updateMenuItem = useCallback((itemId: string, patch: Partial<MenuItem>) => {
+  // Update a single menu item
+  const updateMenuItem = useCallback((itemId: string, updates: Partial<MenuItem>) => {
     setActiveMenu((prev) => {
       if (!prev) return null;
       setIsDirty(true);
+
+      const updatedItems = prev.items.map((item) =>
+        item.id === itemId ? { ...item, ...updates } : item
+      );
+
       return {
         ...prev,
-        items: prev.items.map((it) => (it.id === itemId ? { ...it, ...patch } : it)),
+        items: updatedItems,
       };
     });
   }, []);
 
-  // Remove specific item
+  // Remove a single menu item
   const removeMenuItem = useCallback((itemId: string) => {
     setActiveMenu((prev) => {
       if (!prev) return null;
       setIsDirty(true);
-      const index = prev.items.findIndex((it) => it.id === itemId);
-      if (index === -1) return prev;
 
-      // If removed item had children, promote their level by 1
-      const itemToRemove = prev.items[index];
-      const newItems = prev.items.filter((it) => it.id !== itemId);
+      const updatedItems = prev.items.filter((item) => item.id !== itemId);
       return {
         ...prev,
-        items: newItems,
+        items: updatedItems,
       };
     });
   }, []);
 
-  // Move item up / down
+  // Move item up or down
   const moveMenuItem = useCallback((itemId: string, direction: "up" | "down") => {
     setActiveMenu((prev) => {
       if (!prev) return null;
-      const index = prev.items.findIndex((it) => it.id === itemId);
-      if (index === -1) return prev;
+      const index = prev.items.findIndex((i) => i.id === itemId);
+      if (index < 0) return prev;
       if (direction === "up" && index === 0) return prev;
       if (direction === "down" && index === prev.items.length - 1) return prev;
 
       const targetIndex = direction === "up" ? index - 1 : index + 1;
-      const newItems = [...prev.items];
-      const [movedItem] = newItems.splice(index, 1);
-      newItems.splice(targetIndex, 0, movedItem);
-
-      // If moved to first index, level must be 0
-      if (targetIndex === 0) {
-        movedItem.level = 0;
-      }
+      const copy = [...prev.items];
+      const [moved] = copy.splice(index, 1);
+      copy.splice(targetIndex, 0, moved);
 
       setIsDirty(true);
       return {
         ...prev,
-        items: newItems,
+        items: copy,
       };
     });
   }, []);
 
-  // Indent item (WordPress sub-item)
+  // Indent item (increase level up to 2)
   const indentMenuItem = useCallback((itemId: string) => {
     setActiveMenu((prev) => {
       if (!prev) return null;
-      const index = prev.items.findIndex((it) => it.id === itemId);
+      const index = prev.items.findIndex((i) => i.id === itemId);
       if (index <= 0) return prev; // Cannot indent first item
 
       const prevItem = prev.items[index - 1];
       const currentItem = prev.items[index];
-      
-      // Maximum level 2 (Parent -> Child -> Grandchild)
-      // Level cannot be more than prevItem.level + 1
-      const maxAllowed = Math.min(2, prevItem.level + 1);
-      if (currentItem.level >= maxAllowed) return prev;
 
-      const newLevel = currentItem.level + 1;
+      // Cannot indent more than 1 level deeper than previous item, max level 2
+      const maxAllowedLevel = Math.min(2, prevItem.level + 1);
+      if (currentItem.level >= maxAllowedLevel) return prev;
+
+      const updatedItems = [...prev.items];
+      updatedItems[index] = {
+        ...currentItem,
+        level: currentItem.level + 1,
+        parentId: prevItem.id,
+      };
+
       setIsDirty(true);
       return {
         ...prev,
-        items: prev.items.map((it, idx) =>
-          idx === index ? { ...it, level: newLevel } : it
-        ),
+        items: updatedItems,
       };
     });
   }, []);
 
-  // Outdent item
+  // Outdent item (decrease level down to 0)
   const outdentMenuItem = useCallback((itemId: string) => {
     setActiveMenu((prev) => {
       if (!prev) return null;
-      const index = prev.items.findIndex((it) => it.id === itemId);
-      if (index === -1) return prev;
+      const index = prev.items.findIndex((i) => i.id === itemId);
+      if (index < 0) return prev;
 
       const currentItem = prev.items[index];
       if (currentItem.level <= 0) return prev;
 
+      const updatedItems = [...prev.items];
+      const newLevel = currentItem.level - 1;
+      updatedItems[index] = {
+        ...currentItem,
+        level: newLevel,
+        parentId: newLevel === 0 ? null : currentItem.parentId,
+      };
+
       setIsDirty(true);
       return {
         ...prev,
-        items: prev.items.map((it, idx) =>
-          idx === index ? { ...it, level: currentItem.level - 1 } : it
-        ),
+        items: updatedItems,
       };
     });
   }, []);
 
-  // Reorder items completely (for drag & drop)
-  const reorderItems = useCallback((newItems: MenuItem[]) => {
-    // Ensure first item is never indented
-    if (newItems.length > 0 && newItems[0].level > 0) {
-      newItems[0].level = 0;
-    }
-    setIsDirty(true);
-    setActiveMenu((prev) => (prev ? { ...prev, items: newItems } : null));
+  // Bulk reorder items
+  const reorderItems = useCallback((items: MenuItem[]) => {
+    setActiveMenu((prev) => {
+      if (!prev) return null;
+      setIsDirty(true);
+      return {
+        ...prev,
+        items,
+      };
+    });
   }, []);
 
-  // Save active menu to local storage
-  const saveMenu = useCallback(() => {
+  // Save active menu to Backend API and local cache
+  const saveMenu = useCallback(async (): Promise<boolean> => {
     if (!activeMenu) return false;
 
-    const now = new Date().toISOString();
     const updatedActiveMenu: MenuSchema = {
       ...activeMenu,
-      updatedAt: now,
+      updatedAt: new Date().toISOString(),
     };
 
-    const existingIndex = menus.findIndex((m) => m.id === activeMenu.id);
-    let updatedList: MenuSchema[];
-    if (existingIndex >= 0) {
-      updatedList = menus.map((m) => (m.id === activeMenu.id ? updatedActiveMenu : m));
-    } else {
-      updatedList = [...menus, updatedActiveMenu];
-    }
-
-    setMenus(updatedList);
-    setActiveMenu(updatedActiveMenu);
-    setIsDirty(false);
-
     try {
-      localStorage.setItem(storageKey, JSON.stringify(updatedList));
+      let savedMenu = updatedActiveMenu;
+      // If menu is on backend, call updateMenuApi
+      if (projectId && activeMenu.id && !activeMenu.id.startsWith("menu-")) {
+        savedMenu = await updateMenuApi(activeMenu.id, {
+          name: activeMenu.name,
+          slug: activeMenu.slug,
+          autoAddPages: activeMenu.autoAddPages,
+          locations: activeMenu.locations,
+          items: activeMenu.items,
+          projectId,
+        });
+      } else if (projectId && activeMenu.id.startsWith("menu-")) {
+        // Was a local dummy menu, create it on backend!
+        savedMenu = await createMenuApi({
+          name: activeMenu.name,
+          slug: activeMenu.slug,
+          autoAddPages: activeMenu.autoAddPages,
+          locations: activeMenu.locations,
+          items: activeMenu.items,
+          projectId,
+        });
+      }
+
+      const existingIndex = menus.findIndex((m) => m.id === activeMenu.id || m.id === savedMenu.id);
+      let updatedList: MenuSchema[];
+      if (existingIndex >= 0) {
+        updatedList = [...menus];
+        updatedList[existingIndex] = savedMenu;
+      } else {
+        updatedList = [...menus, savedMenu];
+      }
+
+      setMenus(updatedList);
+      setActiveMenuId(savedMenu.id);
+      setActiveMenu(savedMenu);
+      setIsDirty(false);
+
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(updatedList));
+      } catch (_) {}
+
       return true;
     } catch (e) {
-      console.error("Failed to save menu to local storage:", e);
-      return false;
+      console.error("Failed to save menu via API:", e);
+      // Fallback: save to local storage
+      const existingIndex = menus.findIndex((m) => m.id === activeMenu.id);
+      const updatedList = [...menus];
+      if (existingIndex >= 0) {
+        updatedList[existingIndex] = updatedActiveMenu;
+      } else {
+        updatedList.push(updatedActiveMenu);
+      }
+      setMenus(updatedList);
+      setActiveMenu(updatedActiveMenu);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(updatedList));
+      } catch (_) {}
+      throw e;
     }
-  }, [activeMenu, menus, storageKey]);
+  }, [activeMenu, menus, projectId, storageKey]);
 
-  // Create a brand new menu
+  // Create a brand new menu via API
   const createMenu = useCallback(
-    (name: string) => {
+    async (name: string): Promise<MenuSchema> => {
       const trimmed = name.trim() || "New Menu";
-      const newMenu: MenuSchema = {
-        id: `menu-${Date.now()}`,
-        projectId,
-        name: trimmed,
-        slug: trimmed
-          .toLowerCase()
-          .replace(/[^\w\s-]/g, "")
-          .replace(/[\s_-]+/g, "-"),
-        autoAddPages: false,
-        locations: { ...DEFAULT_LOCATIONS, primary: false },
-        items: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+
+      let newMenu: MenuSchema;
+      if (projectId) {
+        try {
+          newMenu = await createMenuApi({
+            name: trimmed,
+            autoAddPages: false,
+            locations: { ...DEFAULT_LOCATIONS, primary: false },
+            items: [],
+            projectId,
+          });
+        } catch (err) {
+          console.warn("API create failed, falling back to local creation:", err);
+          newMenu = {
+            id: `menu-${Date.now()}`,
+            projectId,
+            name: trimmed,
+            slug: trimmed
+              .toLowerCase()
+              .replace(/[^\w\s-]/g, "")
+              .replace(/[\s_-]+/g, "-"),
+            autoAddPages: false,
+            locations: { ...DEFAULT_LOCATIONS, primary: false },
+            items: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      } else {
+        newMenu = {
+          id: `menu-${Date.now()}`,
+          projectId,
+          name: trimmed,
+          slug: trimmed
+            .toLowerCase()
+            .replace(/[^\w\s-]/g, "")
+            .replace(/[\s_-]+/g, "-"),
+          autoAddPages: false,
+          locations: { ...DEFAULT_LOCATIONS, primary: false },
+          items: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      }
 
       const updated = [...menus, newMenu];
       setMenus(updated);
@@ -421,7 +554,7 @@ export function useMenuState(projectId?: string) {
       try {
         localStorage.setItem(storageKey, JSON.stringify(updated));
       } catch (e) {
-        console.error("Failed to save new menu:", e);
+        console.error("Failed to save new menu locally:", e);
       }
 
       return newMenu;
@@ -429,9 +562,17 @@ export function useMenuState(projectId?: string) {
     [menus, projectId, storageKey]
   );
 
-  // Delete active menu
+  // Delete active menu via API
   const deleteMenu = useCallback(
-    (id: string) => {
+    async (id: string): Promise<boolean> => {
+      if (projectId && !id.startsWith("menu-")) {
+        try {
+          await deleteMenuApi(id, projectId);
+        } catch (err) {
+          console.warn("Failed to delete menu via API:", err);
+        }
+      }
+
       const filtered = menus.filter((m) => m.id !== id);
       setMenus(filtered);
       try {
@@ -448,8 +589,9 @@ export function useMenuState(projectId?: string) {
         setActiveMenu(null);
       }
       setIsDirty(false);
+      return true;
     },
-    [menus, storageKey]
+    [menus, projectId, storageKey]
   );
 
   return {
@@ -472,5 +614,6 @@ export function useMenuState(projectId?: string) {
     saveMenu,
     createMenu,
     deleteMenu,
+    refreshMenus: loadMenus,
   };
 }

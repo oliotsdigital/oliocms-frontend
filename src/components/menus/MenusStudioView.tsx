@@ -4,29 +4,45 @@ import React, { useState, useMemo } from "react";
 import { useMenuState } from "@/state/useMenuState";
 import { useOlio } from "@/state/OlioProvider";
 import { MenuItem, MenuItemType, CreateMenuItemPayload } from "@/models/menu.model";
+import { CollectionRecord, CollectionSchema } from "@/models/collection.model";
+import { fetchCollectionRecordsApi } from "@/api/collection.api";
 
-// Sample pages available for selection
-const AVAILABLE_PAGES = [
-  { id: "page-home", title: "Home", url: "/" },
-  { id: "page-about", title: "About Us", url: "/about" },
-  { id: "page-services", title: "Services", url: "/services" },
-  { id: "page-portfolio", title: "Portfolio / Work", url: "/portfolio" },
-  { id: "page-blog", title: "Blog / Articles", url: "/blog" },
-  { id: "page-pricing", title: "Pricing Plans", url: "/pricing" },
-  { id: "page-faq", title: "FAQs", url: "/faq" },
-  { id: "page-contact", title: "Contact Us", url: "/contact" },
-  { id: "page-careers", title: "Careers", url: "/careers" },
-  { id: "page-terms", title: "Terms & Conditions", url: "/terms" },
-  { id: "page-privacy", title: "Privacy Policy", url: "/privacy-policy" },
-];
+function getRecordTitle(record: CollectionRecord, col?: CollectionSchema): string {
+  if (!record || !record.data) return record?.id ? `Record #${record.id.slice(0, 8)}` : "Untitled";
+  const d = record.data;
 
-const AVAILABLE_CATEGORIES = [
-  { id: "cat-news", title: "News & Releases", url: "/category/news" },
-  { id: "cat-tutorials", title: "Tutorials & Guides", url: "/category/tutorials" },
-  { id: "cat-design", title: "Design & UX", url: "/category/design" },
-  { id: "cat-tech", title: "Engineering & Tech", url: "/category/engineering" },
-  { id: "cat-case-studies", title: "Case Studies", url: "/category/case-studies" },
-];
+  if (typeof d.title === "string" && d.title.trim()) return d.title.trim();
+  if (typeof d.name === "string" && d.name.trim()) return d.name.trim();
+  if (typeof d.heading === "string" && d.heading.trim()) return d.heading.trim();
+  if (typeof d.label === "string" && d.label.trim()) return d.label.trim();
+
+  if (col?.schema_definition && Array.isArray(col.schema_definition)) {
+    for (const field of col.schema_definition) {
+      if (
+        (field.type === "string" || field.type === "uid") &&
+        typeof d[field.name] === "string" &&
+        d[field.name].trim()
+      ) {
+        return d[field.name].trim();
+      }
+    }
+  }
+
+  for (const [key, val] of Object.entries(d)) {
+    if (
+      typeof val === "string" &&
+      val.trim() &&
+      !key.startsWith("_") &&
+      key !== "id" &&
+      val.length < 100
+    ) {
+      return val.trim();
+    }
+  }
+
+  return d.slug ? String(d.slug) : `Record #${record.id.slice(0, 8)}`;
+}
+
 
 export const MenusStudioView: React.FC = () => {
   const { projectState, collectionsState, toast } = useOlio();
@@ -54,26 +70,68 @@ export const MenusStudioView: React.FC = () => {
   } = useMenuState(selectedProjectId);
 
   // Left Accordion open state
-  const [openAccordions, setOpenAccordions] = useState<{
-    pages: boolean;
-    collections: boolean;
-    custom: boolean;
-    categories: boolean;
-  }>({
-    pages: true,
-    collections: true,
+  const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({
+    collections: false,
     custom: false,
-    categories: false,
   });
 
-  const toggleAccordion = (key: "pages" | "collections" | "custom" | "categories") => {
+  const toggleAccordion = (key: string) => {
     setOpenAccordions((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Pages Section State
-  const [pageTab, setPageTab] = useState<"recent" | "all" | "search">("recent");
-  const [pageSearchQuery, setPageSearchQuery] = useState("");
-  const [selectedPages, setSelectedPages] = useState<string[]>([]);
+  // Per-collection records state
+  const [collectionRecordsMap, setCollectionRecordsMap] = useState<Record<string, CollectionRecord[]>>({});
+  const [loadingCollectionIds, setLoadingCollectionIds] = useState<Record<string, boolean>>({});
+  const [selectedRecordsMap, setSelectedRecordsMap] = useState<Record<string, string[]>>({});
+  const [collectionSearchMap, setCollectionSearchMap] = useState<Record<string, string>>({});
+
+  const loadCollectionRecords = async (colId: string, force = false) => {
+    if (!force && collectionRecordsMap[colId]) return;
+    setLoadingCollectionIds((prev) => ({ ...prev, [colId]: true }));
+    try {
+      const res = await fetchCollectionRecordsApi(colId, { limit: "100" });
+      setCollectionRecordsMap((prev) => ({ ...prev, [colId]: res.data || [] }));
+    } catch (err) {
+      console.error(`Failed to load records for collection ${colId}`, err);
+    } finally {
+      setLoadingCollectionIds((prev) => ({ ...prev, [colId]: false }));
+    }
+  };
+
+  const toggleCollectionAccordion = (colId: string) => {
+    const key = `col_records_${colId}`;
+    const nextState = !openAccordions[key];
+    setOpenAccordions((prev) => ({ ...prev, [key]: nextState }));
+    if (nextState) {
+      loadCollectionRecords(colId);
+    }
+  };
+
+  const handleAddCollectionRecords = (col: CollectionSchema) => {
+    const selectedIds = selectedRecordsMap[col.id] || [];
+    if (selectedIds.length === 0) return;
+
+    const records = collectionRecordsMap[col.id] || [];
+    const itemsToAdd: CreateMenuItemPayload[] = selectedIds
+      .map((id) => records.find((r) => r.id === id))
+      .filter((r): r is CollectionRecord => !!r)
+      .map((r) => {
+        const title = getRecordTitle(r, col);
+        const colSlug = col.slug || col.name.toLowerCase().trim().replace(/\s+/g, "-");
+        const recSlug = r.data?.slug ? String(r.data.slug).trim() : r.id;
+        return {
+          label: title,
+          url: `/${colSlug}/${recSlug}`,
+          type: "collection",
+          originalTitle: title,
+          icon: col.icon || "fa-file-lines",
+        };
+      });
+
+    addItemsToActiveMenu(itemsToAdd);
+    setSelectedRecordsMap((prev) => ({ ...prev, [col.id]: [] }));
+    toast.showToast(`Added ${itemsToAdd.length} record(s) from "${col.name}" to menu`, "success");
+  };
 
   // Collections Section State
   const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
@@ -81,9 +139,6 @@ export const MenusStudioView: React.FC = () => {
   // Custom Links Section State
   const [customLinkUrl, setCustomLinkUrl] = useState("https://");
   const [customLinkText, setCustomLinkText] = useState("");
-
-  // Categories Section State
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   // Right Side: Expanded items for settings
   const [expandedItemIds, setExpandedItemIds] = useState<Record<string, boolean>>({});
@@ -94,39 +149,6 @@ export const MenusStudioView: React.FC = () => {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-
-  // Filtered pages for Pages tab
-  const filteredPages = useMemo(() => {
-    if (pageTab === "search") {
-      if (!pageSearchQuery.trim()) return AVAILABLE_PAGES;
-      return AVAILABLE_PAGES.filter((p) =>
-        p.title.toLowerCase().includes(pageSearchQuery.toLowerCase()) ||
-        p.url.toLowerCase().includes(pageSearchQuery.toLowerCase())
-      );
-    }
-    if (pageTab === "recent") {
-      return AVAILABLE_PAGES.slice(0, 5);
-    }
-    return AVAILABLE_PAGES;
-  }, [pageTab, pageSearchQuery]);
-
-  // Handle adding checked pages
-  const handleAddPages = () => {
-    if (selectedPages.length === 0) return;
-    const itemsToAdd: CreateMenuItemPayload[] = selectedPages
-      .map((id) => AVAILABLE_PAGES.find((p) => p.id === id))
-      .filter((p): p is typeof AVAILABLE_PAGES[0] => !!p)
-      .map((p) => ({
-        label: p.title,
-        url: p.url,
-        type: "page",
-        originalTitle: p.title,
-      }));
-
-    addItemsToActiveMenu(itemsToAdd);
-    setSelectedPages([]);
-    toast.showToast(`Added ${itemsToAdd.length} page(s) to menu`, "success");
-  };
 
   // Handle adding checked collections
   const handleAddCollections = () => {
@@ -168,31 +190,13 @@ export const MenusStudioView: React.FC = () => {
     toast.showToast("Custom link added to menu", "success");
   };
 
-  // Handle adding checked categories
-  const handleAddCategories = () => {
-    if (selectedCategories.length === 0) return;
-    const itemsToAdd: CreateMenuItemPayload[] = selectedCategories
-      .map((id) => AVAILABLE_CATEGORIES.find((c) => c.id === id))
-      .filter((c): c is typeof AVAILABLE_CATEGORIES[0] => !!c)
-      .map((c) => ({
-        label: c.title,
-        url: c.url,
-        type: "category",
-        originalTitle: c.title,
-      }));
-
-    addItemsToActiveMenu(itemsToAdd);
-    setSelectedCategories([]);
-    toast.showToast(`Added ${itemsToAdd.length} category item(s) to menu`, "success");
-  };
-
   // Toggle item expansion
   const toggleItemExpanded = (id: string) => {
     setExpandedItemIds((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   // Save handler with UI feedback
-  const handleSaveMenu = () => {
+  const handleSaveMenu = async () => {
     if (!activeMenu) return;
     if (!activeMenu.name.trim()) {
       toast.showToast("Please provide a name for this menu", "error");
@@ -200,15 +204,18 @@ export const MenusStudioView: React.FC = () => {
     }
 
     setIsSaving(true);
-    setTimeout(() => {
-      const ok = saveMenu();
-      setIsSaving(false);
+    try {
+      const ok = await saveMenu();
       if (ok) {
         toast.showToast(`Menu "${activeMenu.name}" saved successfully!`, "success");
       } else {
         toast.showToast("Failed to save menu", "error");
       }
-    }, 250);
+    } catch (e: any) {
+      toast.showToast(e?.message || "Failed to save menu", "error");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Build tree for JSON preview
@@ -277,7 +284,7 @@ export const MenusStudioView: React.FC = () => {
             ) : (
               menus.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name} {m.locations.primary ? "(Primary Navigation)" : ""}
+                  {m.name} {m.locations.primary ? "(Demo Menu)" : ""}
                 </option>
               ))
             )}
@@ -328,141 +335,7 @@ export const MenusStudioView: React.FC = () => {
               </h3>
             </div>
 
-            {/* Accordion 1: Pages */}
-            <div className="glass-card rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm">
-              <button
-                type="button"
-                onClick={() => toggleAccordion("pages")}
-                className="w-full flex items-center justify-between px-4 py-3.5 bg-slate-50/50 dark:bg-slate-800/40 text-left hover:bg-slate-100/60 dark:hover:bg-slate-800/80 transition"
-              >
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                  <i className="fa-regular fa-file-lines text-brand-500"></i>
-                  Pages
-                </span>
-                <i
-                  className={`fa-solid fa-chevron-down text-xs text-slate-400 transition-transform ${
-                    openAccordions.pages ? "rotate-180 text-brand-500" : ""
-                  }`}
-                ></i>
-              </button>
-
-              {openAccordions.pages && (
-                <div className="p-4 border-t border-slate-200/60 dark:border-slate-800/60 space-y-3">
-                  {/* Tabs */}
-                  <div className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-700 text-xs pb-1">
-                    <button
-                      type="button"
-                      onClick={() => setPageTab("recent")}
-                      className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                        pageTab === "recent"
-                          ? "bg-brand-500/10 text-brand-500 font-bold"
-                          : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                      }`}
-                    >
-                      Most Recent
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPageTab("all")}
-                      className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                        pageTab === "all"
-                          ? "bg-brand-500/10 text-brand-500 font-bold"
-                          : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                      }`}
-                    >
-                      View All
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPageTab("search")}
-                      className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                        pageTab === "search"
-                          ? "bg-brand-500/10 text-brand-500 font-bold"
-                          : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                      }`}
-                    >
-                      Search
-                    </button>
-                  </div>
-
-                  {pageTab === "search" && (
-                    <div className="relative">
-                      <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
-                      <input
-                        type="text"
-                        placeholder="Search pages..."
-                        value={pageSearchQuery}
-                        onChange={(e) => setPageSearchQuery(e.target.value)}
-                        className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                      />
-                    </div>
-                  )}
-
-                  {/* Checklist */}
-                  <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                    {filteredPages.length === 0 ? (
-                      <p className="text-xs text-slate-400 py-2 text-center">No pages found</p>
-                    ) : (
-                      filteredPages.map((p) => {
-                        const isChecked = selectedPages.includes(p.id);
-                        return (
-                          <label
-                            key={p.id}
-                            className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-100/80 dark:hover:bg-slate-800/80 cursor-pointer text-xs transition"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedPages((prev) => [...prev, p.id]);
-                                } else {
-                                  setSelectedPages((prev) => prev.filter((id) => id !== p.id));
-                                }
-                              }}
-                              className="rounded border-slate-300 dark:border-slate-700 text-brand-500 focus:ring-brand-500"
-                            />
-                            <span className="text-slate-700 dark:text-slate-200 font-medium truncate flex-1">
-                              {p.title}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono">{p.url}</span>
-                          </label>
-                        );
-                      })
-                    )}
-                  </div>
-
-                  {/* Action Row */}
-                  <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (selectedPages.length === filteredPages.length) {
-                          setSelectedPages([]);
-                        } else {
-                          setSelectedPages(filteredPages.map((p) => p.id));
-                        }
-                      }}
-                      className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition"
-                    >
-                      {selectedPages.length === filteredPages.length && filteredPages.length > 0
-                        ? "Deselect All"
-                        : "Select All"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleAddPages}
-                      disabled={selectedPages.length === 0}
-                      className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-brand-600 dark:hover:bg-brand-400 dark:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold transition shadow-sm"
-                    >
-                      Add to Menu
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Accordion 2: Dynamic CMS Collections */}
+            {/* Accordion 1: Dynamic CMS Collections */}
             <div className="glass-card rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm">
               <button
                 type="button"
@@ -627,84 +500,209 @@ export const MenusStudioView: React.FC = () => {
               )}
             </div>
 
-            {/* Accordion 4: Categories / Taxonomies */}
-            <div className="glass-card rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm">
-              <button
-                type="button"
-                onClick={() => toggleAccordion("categories")}
-                className="w-full flex items-center justify-between px-4 py-3.5 bg-slate-50/50 dark:bg-slate-800/40 text-left hover:bg-slate-100/60 dark:hover:bg-slate-800/80 transition"
-              >
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                  <i className="fa-solid fa-tags text-brand-500"></i>
-                  Categories
-                </span>
-                <i
-                  className={`fa-solid fa-chevron-down text-xs text-slate-400 transition-transform ${
-                    openAccordions.categories ? "rotate-180 text-brand-500" : ""
-                  }`}
-                ></i>
-              </button>
-
-              {openAccordions.categories && (
-                <div className="p-4 border-t border-slate-200/60 dark:border-slate-800/60 space-y-3">
-                  <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                    {AVAILABLE_CATEGORIES.map((cat) => {
-                      const isChecked = selectedCategories.includes(cat.id);
-                      return (
-                        <label
-                          key={cat.id}
-                          className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-100/80 dark:hover:bg-slate-800/80 cursor-pointer text-xs transition"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedCategories((prev) => [...prev, cat.id]);
-                              } else {
-                                setSelectedCategories((prev) =>
-                                  prev.filter((id) => id !== cat.id)
-                                );
-                              }
-                            }}
-                            className="rounded border-slate-300 dark:border-slate-700 text-brand-500 focus:ring-brand-500"
-                          />
-                          <span className="text-slate-700 dark:text-slate-200 font-medium truncate flex-1">
-                            {cat.title}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (selectedCategories.length === AVAILABLE_CATEGORIES.length) {
-                          setSelectedCategories([]);
-                        } else {
-                          setSelectedCategories(AVAILABLE_CATEGORIES.map((c) => c.id));
-                        }
-                      }}
-                      className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition"
-                    >
-                      {selectedCategories.length === AVAILABLE_CATEGORIES.length
-                        ? "Deselect All"
-                        : "Select All"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleAddCategories}
-                      disabled={selectedCategories.length === 0}
-                      className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-brand-600 dark:hover:bg-brand-400 dark:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold transition shadow-sm"
-                    >
-                      Add to Menu
-                    </button>
-                  </div>
+            {/* Per-Collection Records Expanders */}
+            {collectionsState.collections.length > 0 && (
+              <div className="pt-2">
+                <div className="px-1 mb-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    Collection Items
+                  </span>
                 </div>
-              )}
-            </div>
+                <div className="space-y-3">
+                  {collectionsState.collections.map((col) => {
+                    const key = `col_records_${col.id}`;
+                    const isOpen = !!openAccordions[key];
+                    const isLoading = !!loadingCollectionIds[col.id];
+                    const records = collectionRecordsMap[col.id] || [];
+                    const hasLoaded = collectionRecordsMap[col.id] !== undefined;
+                    const searchQuery = (collectionSearchMap[col.id] || "").toLowerCase().trim();
+                    const filteredRecords = searchQuery
+                      ? records.filter((rec) => {
+                          const title = getRecordTitle(rec, col).toLowerCase();
+                          const slug = (rec.data?.slug ? String(rec.data.slug) : "").toLowerCase();
+                          return title.includes(searchQuery) || slug.includes(searchQuery);
+                        })
+                      : records;
+                    const selectedForThisCol = selectedRecordsMap[col.id] || [];
+                    const isAllSelected =
+                      filteredRecords.length > 0 &&
+                      filteredRecords.every((r) => selectedForThisCol.includes(r.id));
+
+                    return (
+                      <div
+                        key={col.id}
+                        className="glass-card rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleCollectionAccordion(col.id)}
+                          className="w-full flex items-center justify-between px-4 py-3.5 bg-slate-50/50 dark:bg-slate-800/40 text-left hover:bg-slate-100/60 dark:hover:bg-slate-800/80 transition"
+                        >
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2 truncate pr-2">
+                            <i
+                              className={`fa-solid ${
+                                col.icon || "fa-file-lines"
+                              } text-brand-500 text-xs w-4 text-center shrink-0`}
+                            ></i>
+                            <span className="truncate">{col.name}</span>
+                            {hasLoaded && (
+                              <span className="px-1.5 py-0.2 rounded-full bg-slate-200/60 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-semibold">
+                                {records.length}
+                              </span>
+                            )}
+                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {isLoading && (
+                              <i className="fa-solid fa-circle-notch fa-spin text-xs text-brand-500 mr-1"></i>
+                            )}
+                            <i
+                              className={`fa-solid fa-chevron-down text-xs text-slate-400 transition-transform ${
+                                isOpen ? "rotate-180 text-brand-500" : ""
+                              }`}
+                            ></i>
+                          </div>
+                        </button>
+
+                        {isOpen && (
+                          <div className="p-4 border-t border-slate-200/60 dark:border-slate-800/60 space-y-3">
+                            {isLoading ? (
+                              <div className="py-6 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                                <i className="fa-solid fa-circle-notch fa-spin text-brand-500"></i>
+                                <span>Loading {col.name} records...</span>
+                              </div>
+                            ) : records.length === 0 ? (
+                              <div className="text-center py-5 text-xs text-slate-400 space-y-1">
+                                <i className="fa-regular fa-folder-open block text-base text-slate-300 dark:text-slate-600"></i>
+                                <p>No records found in this collection.</p>
+                                <button
+                                  type="button"
+                                  onClick={() => loadCollectionRecords(col.id, true)}
+                                  className="text-[10px] text-brand-500 hover:underline"
+                                >
+                                  Refresh
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                {records.length > 5 && (
+                                  <div className="relative">
+                                    <i className="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400"></i>
+                                    <input
+                                      type="text"
+                                      value={collectionSearchMap[col.id] || ""}
+                                      onChange={(e) =>
+                                        setCollectionSearchMap((prev) => ({
+                                          ...prev,
+                                          [col.id]: e.target.value,
+                                        }))
+                                      }
+                                      placeholder={`Search ${col.name}...`}
+                                      className="w-full pl-7 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                    />
+                                  </div>
+                                )}
+
+                                <div className="max-h-52 overflow-y-auto space-y-1 pr-1">
+                                  {filteredRecords.length === 0 ? (
+                                    <div className="text-center py-3 text-xs text-slate-400">
+                                      No matches found.
+                                    </div>
+                                  ) : (
+                                    filteredRecords.map((record) => {
+                                      const title = getRecordTitle(record, col);
+                                      const isChecked = selectedForThisCol.includes(record.id);
+                                      const slug = record.data?.slug ? String(record.data.slug) : null;
+
+                                      return (
+                                        <label
+                                          key={record.id}
+                                          className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-100/80 dark:hover:bg-slate-800/80 cursor-pointer text-xs transition"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                setSelectedRecordsMap((prev) => ({
+                                                  ...prev,
+                                                  [col.id]: [...(prev[col.id] || []), record.id],
+                                                }));
+                                              } else {
+                                                setSelectedRecordsMap((prev) => ({
+                                                  ...prev,
+                                                  [col.id]: (prev[col.id] || []).filter(
+                                                    (id) => id !== record.id
+                                                  ),
+                                                }));
+                                              }
+                                            }}
+                                            className="rounded border-slate-300 dark:border-slate-700 text-brand-500 focus:ring-brand-500"
+                                          />
+                                          <span
+                                            className="text-slate-700 dark:text-slate-200 font-medium truncate flex-1"
+                                            title={title}
+                                          >
+                                            {title}
+                                          </span>
+                                          {slug && (
+                                            <span
+                                              className="text-[10px] text-slate-400 font-mono truncate max-w-[90px]"
+                                              title={`/${col.slug || col.id}/${slug}`}
+                                            >
+                                              /{slug}
+                                            </span>
+                                          )}
+                                        </label>
+                                      );
+                                    })
+                                  )}
+                                </div>
+
+                                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (isAllSelected) {
+                                        const filteredIds = new Set(filteredRecords.map((r) => r.id));
+                                        setSelectedRecordsMap((prev) => ({
+                                          ...prev,
+                                          [col.id]: (prev[col.id] || []).filter((id) => !filteredIds.has(id)),
+                                        }));
+                                      } else {
+                                        const set = new Set([
+                                          ...(selectedRecordsMap[col.id] || []),
+                                          ...filteredRecords.map((r) => r.id),
+                                        ]);
+                                        setSelectedRecordsMap((prev) => ({
+                                          ...prev,
+                                          [col.id]: Array.from(set),
+                                        }));
+                                      }
+                                    }}
+                                    disabled={filteredRecords.length === 0}
+                                    className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-40 transition"
+                                  >
+                                    {isAllSelected ? "Deselect All" : "Select All"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddCollectionRecords(col)}
+                                    disabled={selectedForThisCol.length === 0}
+                                    className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-brand-600 dark:hover:bg-brand-400 dark:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold transition shadow-sm"
+                                  >
+                                    Add to Menu{selectedForThisCol.length > 0 ? ` (${selectedForThisCol.length})` : ""}
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right Column: Menu Structure & Settings (8 cols) */}
@@ -776,8 +774,7 @@ export const MenusStudioView: React.FC = () => {
                       This menu is currently empty
                     </p>
                     <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                      Choose items from the column on the left (Pages, CMS Collections, or Custom
-                      Links) and click &ldquo;Add to Menu&rdquo;.
+                      Choose items from the column on the left (CMS Collections, Custom Links, or specific collection items) and click &ldquo;Add to Menu&rdquo;.
                     </p>
                   </div>
                 ) : (
@@ -1201,12 +1198,18 @@ export const MenusStudioView: React.FC = () => {
             </div>
 
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 if (!newMenuName.trim()) return;
-                const created = createMenu(newMenuName.trim());
-                setIsCreateModalOpen(false);
-                toast.showToast(`Menu "${created.name}" created!`, "success");
+                try {
+                  const created = await createMenu(newMenuName.trim());
+                  setIsCreateModalOpen(false);
+                  if (created) {
+                    toast.showToast(`Menu "${created.name}" created!`, "success");
+                  }
+                } catch (err: any) {
+                  toast.showToast(err?.message || "Failed to create menu", "error");
+                }
               }}
               className="space-y-4"
             >
@@ -1274,11 +1277,15 @@ export const MenusStudioView: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   const name = activeMenu.name;
-                  deleteMenu(activeMenu.id);
                   setIsDeleteConfirmOpen(false);
-                  toast.showToast(`Deleted menu "${name}"`, "info");
+                  try {
+                    await deleteMenu(activeMenu.id);
+                    toast.showToast(`Deleted menu "${name}"`, "info");
+                  } catch (err: any) {
+                    toast.showToast(err?.message || "Failed to delete menu", "error");
+                  }
                 }}
                 className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold transition shadow-md shadow-rose-500/20"
               >

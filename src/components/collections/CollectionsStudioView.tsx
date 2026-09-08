@@ -13,7 +13,7 @@ import {
   EnumerationConfirmData,
 } from "./SelectEnumerationCollectionModal";
 import { useOlio } from "@/state/OlioProvider";
-import { resolveMediaUrl } from "@/utils/media";
+import { resolveMediaUrl, DEFAULT_LAZY_IMAGE } from "@/utils/media";
 
 interface CollectionItemCardProps {
   col: CollectionSchema;
@@ -29,7 +29,7 @@ const CollectionItemCard: React.FC<CollectionItemCardProps> = ({
   onDelete,
 }) => {
   const [imgError, setImgError] = useState(false);
-  const hasFeaturedImage = !!col.featured_image && !imgError;
+  const imageUrl = imgError ? DEFAULT_LAZY_IMAGE : resolveMediaUrl(col.featured_image);
 
   return (
     <div
@@ -40,23 +40,15 @@ const CollectionItemCard: React.FC<CollectionItemCardProps> = ({
           : "glass-panel border-slate-200/50 dark:border-slate-800/50 hover:border-brand-500/30"
       }`}
     >
-      {/* Featured Image to left side of collection name OR default icon if no image */}
+      {/* Featured Image or Default Lazy Loading Image */}
       <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-slate-200/80 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-sm">
-        {hasFeaturedImage ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={resolveMediaUrl(col.featured_image)}
-            alt={col.name}
-            className="w-full h-full object-cover"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <i
-            className={`fa-solid ${col.icon || "fa-cube"} text-base ${
-              isSelected ? "text-brand-500" : "text-slate-500 dark:text-slate-400"
-            }`}
-          ></i>
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={col.name}
+          className="w-full h-full object-cover"
+          onError={() => setImgError(true)}
+        />
       </div>
 
       <div className="min-w-0 flex-1">

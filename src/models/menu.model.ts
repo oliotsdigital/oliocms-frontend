@@ -23,6 +23,7 @@ export interface MenuLocations {
 
 export interface MenuSchema {
   id: string;
+  tenantId?: string;
   projectId?: string;
   name: string;
   slug: string;

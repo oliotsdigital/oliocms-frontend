@@ -12,6 +12,7 @@ function resolveProjectId(projectId?: string): string | null {
 export function normalizeMenu(raw: any): MenuSchema {
   return {
     id: String(raw.id),
+    tenantId: raw.tenant_id || raw.tenantId,
     projectId: raw.project_id || raw.projectId,
     name: raw.name || "Untitled Menu",
     slug: raw.slug || "",
@@ -163,4 +164,26 @@ export async function deleteMenuApi(menuId: string, projectId?: string): Promise
   });
 
   return res.ok;
+}
+
+/**
+ * Fetch a single navigation menu by ID.
+ */
+export async function fetchMenuByIdApi(
+  menuId: string,
+  projectId?: string
+): Promise<MenuSchema | null> {
+  const selectedProjId = resolveProjectId(projectId);
+  try {
+    const res = await apiFetch(`${API_BASE_URL}/menus/${menuId}`, {
+      headers: getCollectionHeaders(selectedProjId || undefined),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return normalizeMenu(data);
+    }
+  } catch (err) {
+    logger.warn(`Failed to fetch menu ${menuId} from API:`, err);
+  }
+  return null;
 }

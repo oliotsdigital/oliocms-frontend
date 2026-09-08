@@ -171,23 +171,17 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                     : "text-slate-600 dark:text-slate-300"
                 }`}
               >
-                {col.featured_image ? (
-                  <div className="w-5 h-5 rounded-md overflow-hidden shrink-0 border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-center bg-slate-100 dark:bg-slate-800">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={resolveMediaUrl(col.featured_image)}
-                      alt={col.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none";
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <i className={`fa-solid ${col.icon || "fa-cube"} ${
-                    pathname === `/collections/${col.id}` ? "text-white" : "text-brand-500"
-                  }`}></i>
-                )}
+                <div className="w-5 h-5 rounded-md overflow-hidden shrink-0 border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-center bg-slate-100 dark:bg-slate-800">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={resolveMediaUrl(col.featured_image)}
+                    alt={col.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = "/images/lazy_loading.png";
+                    }}
+                  />
+                </div>
                 <span className="truncate">{col.name}</span>
               </Link>
             ))}

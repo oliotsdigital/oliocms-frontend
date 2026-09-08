@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CollectionRecord, CollectionSchema, FieldDefinition } from "@/models/collection.model";
 import { deleteCollectionRecordApi } from "@/api/collection.api";
-import { resolveMediaUrl } from "@/utils/media";
+import { resolveMediaUrl, DEFAULT_LAZY_IMAGE } from "@/utils/media";
 import { EditRecordModal } from "./EditRecordModal";
 import { useOlio } from "@/state/OlioProvider";
 
@@ -480,9 +480,14 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                           val = row.data?.slug;
                         } else if (col.key.toLowerCase().includes("title") || col.key.toLowerCase().includes("name")) {
                           val = row.data?.title || row.data?.name;
-                        } else if (col.key.toLowerCase().includes("media") || f.type === "media") {
-                          val = row.data?.media || row.data?.featured_image || row.data?.image;
+                        } else if (col.key.toLowerCase().includes("media") || f.type === "media" || col.key.toLowerCase().includes("image")) {
+                          val = row.data?.media || row.data?.featured_image || row.data?.image || DEFAULT_LAZY_IMAGE;
                         }
+                      }
+
+                      const isMediaCol = f.type === "media" || col.key.toLowerCase().includes("media") || col.key.toLowerCase().includes("image");
+                      if (isMediaCol && (val === undefined || val === null || val === "")) {
+                        val = DEFAULT_LAZY_IMAGE;
                       }
 
                       if (val === undefined || val === null || val === "") {
@@ -493,12 +498,13 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                         );
                       }
 
-                      if (f.type === "media" || col.key.toLowerCase().includes("media")) {
-                        const strVal = String(val);
+                      if (isMediaCol) {
+                        const strVal = String(val || DEFAULT_LAZY_IMAGE);
                         const mediaUrl = resolveMediaUrl(strVal);
                         const isImg =
                           strVal.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i) ||
                           strVal.startsWith("data:image/") ||
+                          strVal.startsWith("/images/") ||
                           strVal.includes("images.unsplash.com");
 
                         return (
@@ -517,7 +523,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                                   alt={f.label || f.name}
                                   className="w-full h-full object-cover transition group-hover:scale-110"
                                   onError={(e) => {
-                                    (e.target as HTMLElement).style.display = "none";
+                                    (e.target as HTMLImageElement).src = DEFAULT_LAZY_IMAGE;
                                   }}
                                 />
                               </a>

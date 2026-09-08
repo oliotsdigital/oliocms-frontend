@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { CollectionSchema, FieldDefinition } from "@/models/collection.model";
 import { createCollectionSchemaApi, updateCollectionSchemaApi } from "@/api/collection.api";
 import { uploadCollectionFeaturedImageApi } from "@/api/storage.api";
-import { resolveMediaUrl } from "@/utils/media";
+import { resolveMediaUrl, DEFAULT_LAZY_IMAGE } from "@/utils/media";
 
 interface SchemaBuilderModalProps {
   isOpen: boolean;
@@ -314,7 +314,7 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
                     alt="Featured Image Preview"
                     className="w-full h-full object-cover"
                     onError={(e) => {
-                      e.currentTarget.src = "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=300";
+                      e.currentTarget.src = DEFAULT_LAZY_IMAGE;
                     }}
                   />
                   <div className="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-2">

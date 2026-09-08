@@ -220,16 +220,15 @@ export const SelectEnumerationCollectionModal: React.FC<
               {selectedCollection && (
                 <div className="p-3.5 rounded-2xl bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/20 flex items-center gap-3 animate-fade-in">
                   <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-purple-500/20 bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400 font-bold text-base shadow-sm">
-                    {selectedCollection.featured_image ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={resolveMediaUrl(selectedCollection.featured_image)}
-                        alt={selectedCollection.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <i className={`fa-solid ${selectedCollection.icon || "fa-cube"}`}></i>
-                    )}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={resolveMediaUrl(selectedCollection.featured_image)}
+                      alt={selectedCollection.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "/images/lazy_loading.png";
+                      }}
+                    />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">

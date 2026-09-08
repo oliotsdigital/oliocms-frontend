@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import { uploadMediaApi, fetchMediaApi } from "@/api/media.api";
-import { resolveMediaUrl } from "@/utils/media";
+import { resolveMediaUrl, DEFAULT_LAZY_IMAGE } from "@/utils/media";
 import { useOlio } from "@/state/OlioProvider";
 import { MediaItem } from "@/models/media.model";
 import { FieldDefinition } from "@/models/collection.model";
@@ -203,8 +203,7 @@ export const MediaFieldInput: React.FC<MediaFieldInputProps> = ({
                   alt={field.label || field.name}
                   className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
                   onError={(e) => {
-                    // Fallback to icon if image fails to load
-                    (e.target as HTMLElement).style.display = "none";
+                    (e.target as HTMLImageElement).src = DEFAULT_LAZY_IMAGE;
                   }}
                 />
               ) : (
@@ -529,7 +528,7 @@ export const MediaFieldInput: React.FC<MediaFieldInputProps> = ({
                               alt={item.name}
                               className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
                               onError={(e) => {
-                                (e.target as HTMLElement).style.display = "none";
+                                (e.target as HTMLImageElement).src = DEFAULT_LAZY_IMAGE;
                               }}
                             />
                           ) : (

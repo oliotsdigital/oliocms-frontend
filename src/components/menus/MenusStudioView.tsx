@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMenuState } from "@/state/useMenuState";
 import { useOlio } from "@/state/OlioProvider";
 import { MenuItem, MenuItemType, CreateMenuItemPayload } from "@/models/menu.model";
@@ -68,6 +70,19 @@ export const MenusStudioView: React.FC = () => {
     createMenu,
     deleteMenu,
   } = useMenuState(selectedProjectId);
+
+  const searchParams = useSearchParams();
+  const queryMenuId = searchParams?.get("id");
+
+  // Auto-select menu from URL parameter if provided
+  useEffect(() => {
+    if (queryMenuId && menus.length > 0 && activeMenuId !== queryMenuId) {
+      const targetMenu = menus.find((m) => m.id === queryMenuId || m.slug === queryMenuId);
+      if (targetMenu) {
+        selectMenu(targetMenu.id);
+      }
+    }
+  }, [queryMenuId, menus, activeMenuId, selectMenu]);
 
   // Left Accordion open state
   const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({
@@ -301,7 +316,7 @@ export const MenusStudioView: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex items-center gap-3 self-end md:self-auto">
+        <div className="flex items-center gap-2.5 self-end md:self-auto flex-wrap">
           {projectState.selectedProject && (
             <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-[11px] font-medium text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60">
               <i className="fa-solid fa-globe text-brand-500"></i>
@@ -310,15 +325,26 @@ export const MenusStudioView: React.FC = () => {
           )}
 
           {activeMenu && (
-            <button
-              type="button"
-              onClick={() => setIsJsonModalOpen(true)}
-              className="px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 transition"
-              title="Preview Headless JSON output"
-            >
-              <i className="fa-solid fa-code text-brand-500"></i>
-              <span>View JSON / API</span>
-            </button>
+            <>
+              <Link
+                href={`/menus/${activeMenu.id}/apis`}
+                className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                title="View & test public REST APIs for this menu"
+              >
+                <i className="fa-solid fa-code text-xs text-brand-500"></i>
+                <span>Get APIs</span>
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => setIsJsonModalOpen(true)}
+                className="px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 transition"
+                title="Preview Headless JSON output"
+              >
+                <i className="fa-regular fa-file-lines text-slate-500"></i>
+                <span>View JSON</span>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -730,6 +756,15 @@ export const MenusStudioView: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2.5">
+                  <Link
+                    href={`/menus/${activeMenu.id}/apis`}
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                    title="View & test public REST APIs for this menu"
+                  >
+                    <i className="fa-solid fa-code text-xs text-brand-500"></i>
+                    <span>Get APIs</span>
+                  </Link>
+
                   <button
                     type="button"
                     onClick={handleSaveMenu}
@@ -1327,21 +1362,31 @@ export const MenusStudioView: React.FC = () => {
               <pre>{JSON.stringify(menuTreeJson, null, 2)}</pre>
             </div>
 
-            <div className="flex items-center justify-between shrink-0 pt-2 text-xs">
+            <div className="flex items-center justify-between shrink-0 pt-2 text-xs flex-wrap gap-2">
               <span className="text-[11px] text-slate-400">
                 Slug: <code>{menuTreeJson.slug}</code>
               </span>
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(JSON.stringify(menuTreeJson, null, 2));
-                  toast.showToast("JSON copied to clipboard!", "success");
-                }}
-                className="px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold transition flex items-center gap-2"
-              >
-                <i className="fa-regular fa-copy"></i>
-                <span>Copy JSON</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`/menus/${activeMenu?.id}/apis`}
+                  onClick={() => setIsJsonModalOpen(false)}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition flex items-center gap-1.5 border border-slate-700"
+                >
+                  <i className="fa-solid fa-code text-brand-400"></i>
+                  <span>Open API Playground</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(menuTreeJson, null, 2));
+                    toast.showToast("JSON copied to clipboard!", "success");
+                  }}
+                  className="px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold transition flex items-center gap-2"
+                >
+                  <i className="fa-regular fa-copy"></i>
+                  <span>Copy JSON</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

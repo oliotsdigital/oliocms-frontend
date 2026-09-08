@@ -1,23 +1,33 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { CollectionRecord, CollectionSchema } from "@/models/collection.model";
 import {
   fetchCollectionSchemaApi,
   fetchCollectionRecordsApi,
-  createCollectionRecordApi,
 } from "@/api/collection.api";
-import { DynamicFormModal } from "@/components/collections/DynamicFormModal";
-import { ImportDataModal } from "@/components/collections/ImportDataModal";
 import { DynamicDataTable } from "@/components/collections/DynamicDataTable";
-import { Pagination } from "@/components/collections/Pagination";
+import { Pagination, PAGE_SIZE_OPTIONS } from "@/components/collections/Pagination";
 import { useOlio } from "@/state/OlioProvider";
-import * as XLSX from "xlsx";
+
+const ImportDataModal = dynamic(
+  () => import("@/components/collections/ImportDataModal").then((m) => m.ImportDataModal),
+  { ssr: false }
+);
 
 interface CollectionDetailViewProps {
   collectionId: string;
+}
+
+const SEARCH_DEBOUNCE_MS = 350;
+
+function isSameSchema(prev: CollectionSchema | null, next: CollectionSchema | null) {
+  if (prev === next) return true;
+  if (!prev || !next) return false;
+  return prev.id === next.id && prev.updated_at === next.updated_at;
 }
 
 export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ collectionId }) => {
@@ -25,69 +35,99 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
   const [schema, setSchema] = useState<CollectionSchema | null>(null);
   const [records, setRecords] = useState<CollectionRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
   const [totalRecords, setTotalRecords] = useState<number>(0);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
-  const loadData = useCallback(async (signal?: { cancelled: boolean }) => {
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearch(searchInput);
+      setPage((current) => (current === 1 ? current : 1));
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
     if (!collectionId) return;
-    setLoading(true);
-    const schemaData = await fetchCollectionSchemaApi(collectionId);
-    if (signal?.cancelled) return;
-    setSchema(schemaData);
+    const signal = { cancelled: false };
 
-    if (schemaData) {
+    (async () => {
+      const schemaData = await fetchCollectionSchemaApi(collectionId);
+      if (signal.cancelled) return;
+      setSchema((prev) => (isSameSchema(prev, schemaData) ? prev : schemaData));
+    })();
+
+    return () => {
+      signal.cancelled = true;
+    };
+  }, [collectionId, refreshNonce]);
+
+  useEffect(() => {
+    if (!collectionId) return;
+    const signal = { cancelled: false };
+
+    (async () => {
+      setLoading(true);
       const filterParams: Record<string, string> = { ...activeFilters };
       if (search.trim()) filterParams["search"] = search.trim();
       filterParams["limit"] = String(pageSize);
       filterParams["offset"] = String((page - 1) * pageSize);
 
       const res = await fetchCollectionRecordsApi(collectionId, filterParams);
-      if (signal?.cancelled) return;
+      if (signal.cancelled) return;
       setRecords(res.data);
       setTotalRecords(res.total);
-    }
-    setLoading(false);
-  }, [collectionId, search, activeFilters, page, pageSize]);
+      setLoading(false);
+    })();
 
-  useEffect(() => {
-    const signal = { cancelled: false };
-    loadData(signal);
     return () => {
       signal.cancelled = true;
     };
-  }, [loadData]);
+  }, [collectionId, search, activeFilters, page, pageSize, refreshNonce]);
 
-  const handleSearchChange = (val: string) => {
-    setSearch(val);
-    setPage(1);
-  };
+  const handleSearchChange = useCallback((val: string) => {
+    setSearchInput(val);
+  }, []);
 
-  const handleFilterChange = (filters: Record<string, string>) => {
+  const handleFilterChange = useCallback((filters: Record<string, string>) => {
     setActiveFilters(filters);
-    setPage(1);
-  };
+    setPage((current) => (current === 1 ? current : 1));
+  }, []);
 
-  const handlePageChange = (newPage: number) => {
+  const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage);
-  };
+  }, []);
 
-  const handlePageSizeChange = (newSize: number) => {
+  const handlePageSizeChange = useCallback((newSize: number) => {
     setPageSize(newSize);
     setPage(1);
-  };
+  }, []);
 
-  const handleExportData = async () => {
+  const handleRefresh = useCallback(() => {
+    setRefreshNonce((n) => n + 1);
+  }, []);
+
+  const handleOpenImport = useCallback(() => {
+    setIsImportModalOpen(true);
+  }, []);
+
+  const handleCloseImport = useCallback(() => {
+    setIsImportModalOpen(false);
+  }, []);
+
+  const handleExportData = useCallback(async () => {
     if (!schema || totalRecords === 0) {
       if (toast) toast.showToast("No records available to export", "error");
       return;
     }
 
     try {
+      const XLSX = await import("xlsx");
       let exportItems = records;
       if (totalRecords > records.length) {
         const fullRes = await fetchCollectionRecordsApi(collectionId, {
@@ -103,14 +143,13 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
 
       const fields = schema.schema_definition || [];
 
-      // Build tabular data rows for XLSX export
       const rows = exportItems.map((r) => {
         const rowObj: Record<string, any> = {};
 
         if (fields.length > 0) {
           fields.forEach((f) => {
             const colName = f.label || f.name;
-            let val = r.data?.[f.name];
+            const val = r.data?.[f.name];
             if (val === undefined || val === null) {
               rowObj[colName] = "";
             } else if (typeof val === "boolean") {
@@ -131,15 +170,12 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
           });
         }
 
-        // Include creation date
         rowObj["Created At"] = r.created_at ? new Date(r.created_at).toISOString() : "";
         return rowObj;
       });
 
-      // Create sheet from tabular rows
       const worksheet = XLSX.utils.json_to_sheet(rows);
 
-      // Auto-fit column widths
       if (rows.length > 0) {
         const colWidths = Object.keys(rows[0]).map((key) => {
           const maxLen = Math.max(
@@ -167,13 +203,11 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
       console.error("Failed to export records as XLSX:", err);
       if (toast) toast.showToast("Failed to export records as Excel file", "error");
     }
-  };
-
+  }, [schema, totalRecords, records, collectionId, search, activeFilters, toast]);
 
   return (
     <AppLayout pageTitle={schema ? schema.name : "Collection Details"}>
       <div className="space-y-6">
-        {/* Navigation Breadcrumb */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
             <Link href="/collections" className="hover:text-brand-500 transition">
@@ -192,7 +226,6 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
           )}
         </div>
 
-        {/* Top Header Action Buttons Row */}
         {schema && (
           <div className="flex flex-wrap items-center justify-end gap-2.5">
             <Link
@@ -204,7 +237,7 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
             </Link>
 
             <button
-              onClick={() => setIsImportModalOpen(true)}
+              onClick={handleOpenImport}
               className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
               title="Import Records from Excel (.xlsx, .xls) or CSV"
             >
@@ -228,7 +261,7 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
             </Link>
 
             <button
-              onClick={() => loadData()}
+              onClick={handleRefresh}
               className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
               title="Refresh Records"
             >
@@ -244,7 +277,6 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
           </div>
         )}
 
-        {/* Data Table */}
         {loading && !schema ? (
           <div className="h-64 rounded-2xl glass-panel animate-pulse" />
         ) : schema ? (
@@ -252,38 +284,30 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
             <DynamicDataTable
               schema={schema}
               records={records}
-              search={search}
+              search={searchInput}
               onSearchChange={handleSearchChange}
-              onRefresh={() => loadData()}
+              onRefresh={handleRefresh}
               onFilterChange={handleFilterChange}
             />
 
-            {/* Pagination Controls */}
             <Pagination
               currentPage={page}
               totalItems={totalRecords}
               pageSize={pageSize}
-              pageSizeOptions={[10, 25, 50, 100]}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
               onPageChange={handlePageChange}
               onPageSizeChange={handlePageSizeChange}
               isLoading={loading}
             />
 
-            {/* Ingest Record Modal */}
-            <DynamicFormModal
-              isOpen={isAddModalOpen}
-              onClose={() => setIsAddModalOpen(false)}
-              schema={schema}
-              onSuccess={() => loadData()}
-            />
-
-            {/* Import Data Modal (XLSX / CSV Column Mapping) */}
-            <ImportDataModal
-              isOpen={isImportModalOpen}
-              onClose={() => setIsImportModalOpen(false)}
-              schema={schema}
-              onSuccess={() => loadData()}
-            />
+            {isImportModalOpen && (
+              <ImportDataModal
+                isOpen
+                onClose={handleCloseImport}
+                schema={schema}
+                onSuccess={handleRefresh}
+              />
+            )}
           </div>
         ) : (
           <div className="p-8 text-center glass-panel rounded-2xl">

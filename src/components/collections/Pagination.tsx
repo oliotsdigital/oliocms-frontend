@@ -2,6 +2,8 @@
 
 import React, { useMemo } from "react";
 
+export const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
 interface PaginationProps {
   currentPage: number;
   totalItems: number;
@@ -12,15 +14,15 @@ interface PaginationProps {
   isLoading?: boolean;
 }
 
-export const Pagination: React.FC<PaginationProps> = ({
+export const Pagination: React.FC<PaginationProps> = React.memo(function Pagination({
   currentPage,
   totalItems,
   pageSize,
-  pageSizeOptions = [10, 25, 50, 100],
+  pageSizeOptions = PAGE_SIZE_OPTIONS,
   onPageChange,
   onPageSizeChange,
   isLoading = false,
-}) => {
+}) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
 
@@ -162,4 +164,4 @@ export const Pagination: React.FC<PaginationProps> = ({
       </div>
     </div>
   );
-};
+});

@@ -12,6 +12,8 @@ interface PaginationProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   isLoading?: boolean;
+  pageSizeLabel?: string;
+  itemLabel?: string;
 }
 
 export const Pagination: React.FC<PaginationProps> = React.memo(function Pagination({
@@ -22,6 +24,8 @@ export const Pagination: React.FC<PaginationProps> = React.memo(function Paginat
   onPageChange,
   onPageSizeChange,
   isLoading = false,
+  pageSizeLabel = "Rows per page:",
+  itemLabel = "entries",
 }) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
@@ -62,7 +66,7 @@ export const Pagination: React.FC<PaginationProps> = React.memo(function Paginat
       {/* Left: Rows Per Page & Item Range Summary */}
       <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
         <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium">
-          <span>Rows per page:</span>
+          <span>{pageSizeLabel}</span>
           <select
             value={pageSize}
             disabled={isLoading}
@@ -81,7 +85,7 @@ export const Pagination: React.FC<PaginationProps> = React.memo(function Paginat
           Showing{" "}
           <strong className="text-slate-900 dark:text-white font-bold">{startItem}</strong> -{" "}
           <strong className="text-slate-900 dark:text-white font-bold">{endItem}</strong> of{" "}
-          <strong className="text-slate-900 dark:text-white font-bold">{totalItems}</strong> entries
+          <strong className="text-slate-900 dark:text-white font-bold">{totalItems}</strong> {itemLabel}
         </div>
       </div>
 

@@ -43,6 +43,7 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
   const [icon, setIcon] = useState("fa-cube");
   const [featuredImage, setFeaturedImage] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isPublic, setIsPublic] = useState<boolean>(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +55,7 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
       setApiIdPlural(initialData.api_id_plural || "");
       setIcon(initialData.icon || "fa-cube");
       setFeaturedImage(initialData.featured_image || "");
+      setIsPublic(initialData.is_public !== false);
     } else {
       setName("");
       setSlug("");
@@ -61,6 +63,7 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
       setApiIdPlural("");
       setIcon("fa-cube");
       setFeaturedImage("");
+      setIsPublic(true);
     }
     setImageFile(null);
     setError(null);
@@ -117,6 +120,7 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
         featured_image: imageFile ? undefined : (featuredImage.trim() || undefined),
         api_id_singular: apiIdSingular.trim() || undefined,
         api_id_plural: apiIdPlural.trim() || undefined,
+        is_public: isPublic,
       });
 
       if (!res.error && imageFile) {
@@ -156,6 +160,7 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
         api_id_singular: apiIdSingular.trim() || undefined,
         api_id_plural: apiIdPlural.trim() || undefined,
         schema_definition: defaultFields,
+        is_public: isPublic,
       });
 
       if (!res.error && res.collection?.id && imageFile) {
@@ -270,6 +275,38 @@ export const SchemaBuilderModal: React.FC<SchemaBuilderModalProps> = ({
                 className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
+          </div>
+
+          {/* Collection Visibility / Access Dropdown */}
+          <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                Collection Access & Visibility *
+              </label>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1.5 ${
+                  isPublic
+                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                    : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                }`}
+              >
+                <i className={`fa-solid ${isPublic ? "fa-globe" : "fa-lock"} text-[9px]`}></i>
+                {isPublic ? "Public Collection" : "Private Collection"}
+              </span>
+            </div>
+            <select
+              value={isPublic ? "public" : "private"}
+              onChange={(e) => setIsPublic(e.target.value === "public")}
+              className="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer shadow-sm transition"
+            >
+              <option value="public">Public — Accessible via Public REST APIs</option>
+              <option value="private">Private — Restricted (Blocked from Public REST APIs)</option>
+            </select>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
+              {isPublic
+                ? "Public collections can be queried by external apps & frontend clients via public REST endpoints. The 'Get APIs' view is enabled."
+                : "Private collections are internal only and cannot be accessed via Public APIs. The 'Get APIs' button will be greyed out."}
+            </p>
           </div>
 
           {/* Featured Image Option (Upload Only) */}

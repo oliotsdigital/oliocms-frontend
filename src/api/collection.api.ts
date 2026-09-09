@@ -142,7 +142,15 @@ export async function createCollectionSchemaApi(
 
 export async function updateCollectionSchemaApi(
   collectionId: string,
-  payload: { name?: string; icon?: string; featured_image?: string; api_id_singular?: string; api_id_plural?: string; schema_definition?: any[] }
+  payload: {
+    name?: string;
+    icon?: string;
+    featured_image?: string;
+    api_id_singular?: string;
+    api_id_plural?: string;
+    schema_definition?: any[];
+    is_public?: boolean;
+  }
 ): Promise<{ collection?: CollectionSchema; error?: string }> {
   const selectedProjId = resolveProjectId();
   if (!selectedProjId) {

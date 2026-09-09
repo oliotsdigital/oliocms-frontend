@@ -217,6 +217,18 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
             <span className="text-slate-900 dark:text-white font-bold">
               {schema ? schema.name : "Loading..."}
             </span>
+            {schema && (
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 shrink-0 ${
+                  schema.is_public !== false
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                    : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                }`}
+              >
+                <i className={`fa-solid ${schema.is_public !== false ? "fa-globe" : "fa-lock"} text-[8px]`}></i>
+                {schema.is_public !== false ? "Public" : "Private"}
+              </span>
+            )}
           </div>
 
           {schema && (
@@ -228,13 +240,22 @@ export const CollectionDetailView: React.FC<CollectionDetailViewProps> = ({ coll
 
         {schema && (
           <div className="flex flex-wrap items-center justify-end gap-2.5">
-            <Link
-              href={`/collections/${schema.id}/apis`}
-              className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
-              title="View & test public REST APIs for this collection"
-            >
-              <i className="fa-solid fa-code text-xs text-brand-500"></i> Get APIs
-            </Link>
+            {schema.is_public === false ? (
+              <span
+                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 text-xs font-bold flex items-center gap-1.5 shadow-sm opacity-50 cursor-not-allowed select-none"
+                title="This collection is Private. Public APIs are disabled."
+              >
+                <i className="fa-solid fa-lock text-xs"></i> Get APIs
+              </span>
+            ) : (
+              <Link
+                href={`/collections/${schema.id}/apis`}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand-500 border border-brand-500/20 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                title="View & test public REST APIs for this collection"
+              >
+                <i className="fa-solid fa-code text-xs text-brand-500"></i> Get APIs
+              </Link>
+            )}
 
             <button
               onClick={handleOpenImport}

@@ -42,6 +42,7 @@ export interface CollectionSchema {
   api_id_singular?: string;
   api_id_plural?: string;
   schema_definition: FieldDefinition[];
+  is_public?: boolean;
   is_deleted?: boolean;
   created_at: string;
   updated_at: string;
@@ -63,6 +64,7 @@ export interface CreateCollectionPayload {
   api_id_singular?: string;
   api_id_plural?: string;
   schema_definition: FieldDefinition[];
+  is_public?: boolean;
 }
 
 

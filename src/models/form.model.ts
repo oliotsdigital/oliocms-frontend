@@ -70,3 +70,16 @@ export interface FormRecord {
   updated_at?: string;
 }
 
+export interface FormRecordsPage {
+  data: FormRecord[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface FetchFormRecordsOptions {
+  skip?: number;
+  limit?: number;
+  signal?: AbortSignal;
+}
+

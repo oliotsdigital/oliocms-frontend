@@ -12,11 +12,11 @@ interface CollectionWidgetCardProps {
   onRemove: (widgetId: string) => void;
 }
 
-export const CollectionWidgetCard: React.FC<CollectionWidgetCardProps> = ({
+export const CollectionWidgetCard: React.FC<CollectionWidgetCardProps> = React.memo(function CollectionWidgetCard({
   widget,
   collection,
   onRemove,
-}) => {
+}) {
   const [records, setRecords] = useState<CollectionRecord[]>([]);
   const [totalRecords, setTotalRecords] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -33,7 +33,7 @@ export const CollectionWidgetCard: React.FC<CollectionWidgetCardProps> = ({
         name !== "featured_image"
       );
     });
-  }, [collection]);
+  }, [collection.schema_definition]);
 
   const loadRecords = useCallback(async () => {
     setIsLoading(true);
@@ -239,4 +239,4 @@ export const CollectionWidgetCard: React.FC<CollectionWidgetCardProps> = ({
       </div>
     </div>
   );
-};
+});

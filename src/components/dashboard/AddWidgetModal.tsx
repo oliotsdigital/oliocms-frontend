@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { CollectionSchema } from "@/models/collection.model";
 import { WidgetWidth } from "@/models/widget.model";
 
@@ -17,23 +17,10 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
   onAddWidget,
   collections,
 }) => {
-  const [selectedCollectionId, setSelectedCollectionId] = useState<string>("");
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string>(collections[0]?.id || "");
   const [width, setWidth] = useState<WidgetWidth>("1/3");
   const [limit, setLimit] = useState<number>(5);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      if (collections.length > 0) {
-        setSelectedCollectionId(collections[0].id);
-      } else {
-        setSelectedCollectionId("");
-      }
-      setWidth("1/3");
-      setLimit(5);
-      setError(null);
-    }
-  }, [isOpen, collections]);
 
   if (!isOpen) return null;
 

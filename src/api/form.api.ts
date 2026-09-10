@@ -1,9 +1,61 @@
 import { APP_CONFIG } from "@/config/app.config";
 import { apiFetch, getCollectionHeaders, getSelectedProjectId } from "./client";
 import { logger } from "@/utils/logger";
-import { FormSchema, FormRecord, CreateFormPayload, UpdateFormPayload } from "@/models/form.model";
+import {
+  FormSchema,
+  FormField,
+  FormRecord,
+  FormRecordsPage,
+  FetchFormRecordsOptions,
+  CreateFormPayload,
+  UpdateFormPayload,
+} from "@/models/form.model";
 
 const API_BASE_URL = APP_CONFIG.apiBaseUrl;
+
+export const FORMS_LIST_MAX_LIMIT = 200;
+export const FORM_RECORDS_DEFAULT_LIMIT = 50;
+export const FORM_RECORDS_MAX_LIMIT = 200;
+
+function formApiError(errorData: any, fallback: string): Error {
+  const msg =
+    (typeof errorData?.error === "string" && errorData.error) ||
+    (typeof errorData?.detail === "string" && errorData.detail) ||
+    (typeof errorData?.message === "string" && errorData.message) ||
+    fallback;
+  const err = new Error(msg) as Error & { code?: string };
+  if (typeof errorData?.code === "string") err.code = errorData.code;
+  return err;
+}
+
+function isBlankValue(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (typeof value === "string") return value.trim() === "";
+  return false;
+}
+
+/** Build a POST /forms/{id}/records payload using field name or id only. Extra keys are omitted. */
+export function buildFormSubmissionData(
+  fields: FormField[],
+  values: Record<string, any>
+): Record<string, any> {
+  const data: Record<string, any> = {};
+
+  fields.forEach((field) => {
+    const key = field.name || field.id;
+    if (!key) return;
+
+    const raw = values[field.name] ?? values[field.id];
+    if (field.type === "checkbox") {
+      data[key] = Boolean(raw);
+      return;
+    }
+    if (isBlankValue(raw)) return;
+    data[key] = typeof raw === "string" ? raw.trim() : raw;
+  });
+
+  return data;
+}
 
 function resolveProjectId(projectId?: string): string | null {
   return projectId || getSelectedProjectId();
@@ -42,19 +94,33 @@ export async function fetchFormsApi(projectId?: string): Promise<FormSchema[]> {
 
   logger.info(`Fetching forms for project ${selectedProjId}...`);
   try {
-    const res = await apiFetch(`${API_BASE_URL}/forms?project_id=${selectedProjId}`, {
-      headers: getCollectionHeaders(selectedProjId),
-    });
+    const collected: FormSchema[] = [];
+    let offset = 0;
 
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        logger.success(`Fetched ${data.length} forms from API.`);
-        return data.map(normalizeForm);
+    while (offset < FORMS_LIST_MAX_LIMIT * 20) {
+      const params = new URLSearchParams({
+        project_id: selectedProjId,
+        limit: String(FORMS_LIST_MAX_LIMIT),
+        offset: String(offset),
+      });
+      const res = await apiFetch(`${API_BASE_URL}/forms?${params.toString()}`, {
+        headers: getCollectionHeaders(selectedProjId),
+      });
+
+      if (!res.ok) {
+        logger.warn(`Failed to fetch forms: ${res.status} ${res.statusText}`);
+        break;
       }
-    } else {
-      logger.warn(`Failed to fetch forms: ${res.status} ${res.statusText}`);
+
+      const data = await res.json();
+      const page = Array.isArray(data) ? data.map(normalizeForm) : [];
+      collected.push(...page);
+      if (page.length < FORMS_LIST_MAX_LIMIT) break;
+      offset += FORMS_LIST_MAX_LIMIT;
     }
+
+    logger.success(`Fetched ${collected.length} forms from API.`);
+    return collected;
   } catch (err) {
     logger.error("Error fetching forms from API:", err);
   }
@@ -156,12 +222,25 @@ export async function deleteFormApi(formId: string, projectId?: string): Promise
  */
 export async function fetchFormRecordsApi(
   formId: string,
-  projectId?: string
-): Promise<{ data: FormRecord[]; total: number }> {
+  projectId?: string,
+  options: FetchFormRecordsOptions = {}
+): Promise<FormRecordsPage> {
   const selectedProjId = resolveProjectId(projectId);
+  const skip = Math.max(0, options.skip ?? 0);
+  const limit = Math.min(
+    FORM_RECORDS_MAX_LIMIT,
+    Math.max(1, options.limit ?? FORM_RECORDS_DEFAULT_LIMIT)
+  );
+  const empty: FormRecordsPage = { data: [], total: 0, skip, limit };
+
   try {
-    const res = await apiFetch(`${API_BASE_URL}/forms/${formId}/records?limit=200`, {
+    const params = new URLSearchParams({
+      skip: String(skip),
+      limit: String(limit),
+    });
+    const res = await apiFetch(`${API_BASE_URL}/forms/${formId}/records?${params.toString()}`, {
       headers: getCollectionHeaders(selectedProjId || undefined),
+      signal: options.signal,
     });
 
     if (res.ok) {
@@ -169,12 +248,17 @@ export async function fetchFormRecordsApi(
       return {
         data: Array.isArray(data.data) ? data.data : [],
         total: typeof data.total === "number" ? data.total : 0,
+        skip: typeof data.skip === "number" ? data.skip : skip,
+        limit: typeof data.limit === "number" ? data.limit : limit,
       };
     }
   } catch (err) {
+    if (options.signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) {
+      throw err;
+    }
     logger.error(`Error fetching records for form ${formId}:`, err);
   }
-  return { data: [], total: 0 };
+  return empty;
 }
 
 /**
@@ -198,7 +282,7 @@ export async function createFormRecordApi(
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || `Failed to submit form record: ${res.statusText}`);
+    throw formApiError(errorData, "Failed to submit form record");
   }
 
   return res.json();

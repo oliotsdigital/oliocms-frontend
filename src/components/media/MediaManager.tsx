@@ -8,11 +8,22 @@ import { MediaUploadModal } from "./MediaUploadModal";
 import { Pagination } from "@/components/collections/Pagination";
 
 const MEDIA_PAGE_SIZE_OPTIONS = [12, 24, 48, 96];
+const SEARCH_DEBOUNCE_MS = 350;
 
 export const MediaManager: React.FC = () => {
   const { media } = useOlio();
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(24);
+  const [searchInput, setSearchInput] = useState(media.mediaSearch);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (searchInput !== media.mediaSearch) {
+        media.setMediaSearch(searchInput);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchInput, media.mediaSearch, media.setMediaSearch]);
 
   // Reset to first page when search query or selected project changes
   useEffect(() => {
@@ -50,8 +61,8 @@ export const MediaManager: React.FC = () => {
   return (
     <div className="space-y-5">
       <MediaToolbar
-        mediaSearch={media.mediaSearch}
-        onSearchChange={media.setMediaSearch}
+        mediaSearch={searchInput}
+        onSearchChange={setSearchInput}
         onOpenUploadModal={() => media.setShowMediaModal(true)}
         onRefresh={media.refreshMedia}
         isLoading={media.isLoading}

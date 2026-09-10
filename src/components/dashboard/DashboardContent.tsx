@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useOlio } from "@/state/OlioProvider";
 import { WelcomeBanner } from "./WelcomeBanner";
 import { SetupChecklist } from "./SetupChecklist";
@@ -43,7 +43,7 @@ export const DashboardContent: React.FC = () => {
     }
   }, [widgets, storageKey, isLoaded]);
 
-  const handleAddWidget = (data: { collectionId: string; width: WidgetWidth; limit: number }) => {
+  const handleAddWidget = useCallback((data: { collectionId: string; width: WidgetWidth; limit: number }) => {
     const newWidget: DashboardWidget = {
       id: `widget_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       collectionId: data.collectionId,
@@ -52,11 +52,14 @@ export const DashboardContent: React.FC = () => {
       createdAt: Date.now(),
     };
     setWidgets((prev) => [...prev, newWidget]);
-  };
+  }, []);
 
-  const handleRemoveWidget = (widgetId: string) => {
+  const handleRemoveWidget = useCallback((widgetId: string) => {
     setWidgets((prev) => prev.filter((w) => w.id !== widgetId));
-  };
+  }, []);
+
+  const handleOpenAddModal = useCallback(() => setIsAddModalOpen(true), []);
+  const handleCloseAddModal = useCallback(() => setIsAddModalOpen(false), []);
 
   return (
     <div className="space-y-6">
@@ -100,7 +103,7 @@ export const DashboardContent: React.FC = () => {
       <div className="relative border-2 border-dashed border-slate-300 dark:border-slate-700/80 hover:border-brand-500/60 dark:hover:border-brand-500/60 rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center text-center transition group bg-slate-50/40 dark:bg-slate-900/30">
         <button
           type="button"
-          onClick={() => setIsAddModalOpen(true)}
+          onClick={handleOpenAddModal}
           className="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition transform active:scale-95 flex items-center gap-2 group-hover:shadow-brand-500/40 cursor-pointer"
         >
           <i className="fa-solid fa-plus text-xs"></i>
@@ -112,12 +115,14 @@ export const DashboardContent: React.FC = () => {
       </div>
 
       {/* Add Widget Popup Modal */}
-      <AddWidgetModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onAddWidget={handleAddWidget}
-        collections={collectionsState.collections}
-      />
+      {isAddModalOpen && (
+        <AddWidgetModal
+          isOpen
+          onClose={handleCloseAddModal}
+          onAddWidget={handleAddWidget}
+          collections={collectionsState.collections}
+        />
+      )}
     </div>
   );
 };

@@ -4,8 +4,18 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useOlio } from "@/state/OlioProvider";
 import { useFormState } from "@/state/useFormState";
 import { FormField, FormFieldType, FormSchema, FormRecord } from "@/models/form.model";
-import { fetchFormRecordsApi, createFormRecordApi, deleteFormRecordApi } from "@/api/form.api";
+import {
+  fetchFormRecordsApi,
+  createFormRecordApi,
+  deleteFormRecordApi,
+  buildFormSubmissionData,
+  FORM_RECORDS_DEFAULT_LIMIT,
+  FORM_RECORDS_MAX_LIMIT,
+} from "@/api/form.api";
 import { APP_CONFIG } from "@/config/app.config";
+import { Pagination } from "@/components/collections/Pagination";
+
+const FORM_RECORD_PAGE_SIZES = [25, 50, 100, FORM_RECORDS_MAX_LIMIT];
 
 const AVAILABLE_FIELD_TYPES: {
   type: FormFieldType;
@@ -86,6 +96,327 @@ const AVAILABLE_FIELD_TYPES: {
   },
 ];
 
+const FIELD_TYPE_BY_TYPE = Object.fromEntries(
+  AVAILABLE_FIELD_TYPES.map((meta) => [meta.type, meta])
+) as Record<FormFieldType, (typeof AVAILABLE_FIELD_TYPES)[number]>;
+
+const SEARCH_DEBOUNCE_MS = 350;
+
+function renderCellValue(record: FormRecord, field: FormField) {
+  const rawVal = record.data?.[field.name] ?? record.data?.[field.id];
+  if (rawVal === undefined || rawVal === null || rawVal === "") {
+    return <span className="text-slate-400 dark:text-slate-600 font-mono text-[10px]">—</span>;
+  }
+
+  if (typeof rawVal === "boolean") {
+    return (
+      <span
+        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+          rawVal
+            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+        }`}
+      >
+        {rawVal ? "True" : "False"}
+      </span>
+    );
+  }
+
+  if (field.type === "date") {
+    try {
+      return new Date(rawVal).toLocaleDateString();
+    } catch {
+      return String(rawVal);
+    }
+  }
+
+  if (field.type === "url") {
+    return (
+      <a
+        href={String(rawVal)}
+        target="_blank"
+        rel="noreferrer"
+        className="text-brand-500 hover:underline flex items-center gap-1 truncate max-w-[140px]"
+      >
+        <span>{String(rawVal)}</span>
+        <i className="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+      </a>
+    );
+  }
+
+  if (field.type === "email") {
+    return (
+      <a href={`mailto:${rawVal}`} className="text-brand-500 hover:underline truncate max-w-[150px] block">
+        {String(rawVal)}
+      </a>
+    );
+  }
+
+  return (
+    <span className="truncate max-w-[160px] block text-slate-800 dark:text-slate-200" title={String(rawVal)}>
+      {String(rawVal)}
+    </span>
+  );
+}
+
+const FormSidebarItem = React.memo(function FormSidebarItem({
+  form,
+  isSelected,
+  onSelect,
+}: {
+  form: FormSchema;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(form.id)}
+      className={`w-full text-left p-3 rounded-xl transition flex items-center justify-between gap-3 group ${
+        isSelected
+          ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
+          : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+      }`}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <i className={`fa-solid fa-rectangle-list text-xs ${isSelected ? "text-white" : "text-brand-500"}`}></i>
+          <span className="font-bold text-xs truncate">{form.name}</span>
+        </div>
+        <p className={`text-[10px] truncate mt-0.5 ${isSelected ? "text-white/80" : "text-slate-400"}`}>
+          /{form.slug}
+        </p>
+      </div>
+      <span
+        className={`text-[10px] font-mono px-2 py-0.5 rounded-full shrink-0 ${
+          isSelected ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+        }`}
+      >
+        {form.fields.length} {form.fields.length === 1 ? "field" : "fields"}
+      </span>
+    </button>
+  );
+});
+
+const FormRecordRow = React.memo(function FormRecordRow({
+  record,
+  fields,
+  onView,
+  onDelete,
+}: {
+  record: FormRecord;
+  fields: FormField[];
+  onView: (record: FormRecord) => void;
+  onDelete: (recordId: string) => void;
+}) {
+  return (
+    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+      {fields.map((field) => (
+        <td key={field.id} className="py-2.5 px-3 text-xs">
+          {renderCellValue(record, field)}
+        </td>
+      ))}
+      <td className="py-2.5 px-3 text-[11px] text-slate-400 font-mono whitespace-nowrap">
+        {new Date(record.created_at).toLocaleString()}
+      </td>
+      <td className="py-2.5 px-3 text-right whitespace-nowrap">
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => onView(record)}
+            className="w-7 h-7 rounded-lg text-slate-400 hover:text-brand-500 hover:bg-brand-500/10 transition flex items-center justify-center"
+            title="View JSON details"
+          >
+            <i className="fa-solid fa-code text-xs"></i>
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(record.id)}
+            className="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition flex items-center justify-center"
+            title="Delete Submission"
+          >
+            <i className="fa-solid fa-trash text-xs"></i>
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+});
+
+const FieldEditorCard = React.memo(function FieldEditorCard({
+  field,
+  index,
+  isLast,
+  onUpdate,
+  onMove,
+  onRemove,
+}: {
+  field: FormField;
+  index: number;
+  isLast: boolean;
+  onUpdate: (fieldId: string, updates: Partial<FormField>) => void;
+  onMove: (fromIndex: number, toIndex: number) => void;
+  onRemove: (fieldId: string) => void;
+}) {
+  const meta = FIELD_TYPE_BY_TYPE[field.type];
+
+  return (
+    <div className="p-4 rounded-xl bg-white dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/70 shadow-sm space-y-3 hover:border-brand-500/40 transition">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-brand-500/10 text-brand-500 flex items-center justify-center text-xs shrink-0">
+            <i className={`fa-solid ${meta?.icon || "fa-font"}`}></i>
+          </div>
+          <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+            #{index + 1}. {field.label}
+          </span>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
+            {field.type}
+          </span>
+          {field.required && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-500">
+              Required
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            disabled={index === 0}
+            onClick={() => onMove(index, index - 1)}
+            className="w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white disabled:opacity-30 transition flex items-center justify-center"
+            title="Move Up"
+          >
+            <i className="fa-solid fa-arrow-up text-xs"></i>
+          </button>
+          <button
+            type="button"
+            disabled={isLast}
+            onClick={() => onMove(index, index + 1)}
+            className="w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white disabled:opacity-30 transition flex items-center justify-center"
+            title="Move Down"
+          >
+            <i className="fa-solid fa-arrow-down text-xs"></i>
+          </button>
+          <button
+            type="button"
+            onClick={() => onRemove(field.id)}
+            className="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition flex items-center justify-center"
+            title="Delete Field"
+          >
+            <i className="fa-solid fa-trash text-xs"></i>
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+        <div className="sm:col-span-4">
+          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+            Field Label
+          </label>
+          <input
+            type="text"
+            value={field.label}
+            onChange={(e) => onUpdate(field.id, { label: e.target.value })}
+            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
+        </div>
+
+        <div className="sm:col-span-3">
+          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+            Field Key (Payload ID)
+          </label>
+          <input
+            type="text"
+            value={field.name}
+            onChange={(e) =>
+              onUpdate(field.id, {
+                name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""),
+              })
+            }
+            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
+        </div>
+
+        <div className="sm:col-span-3">
+          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+            Placeholder Text
+          </label>
+          <input
+            type="text"
+            value={field.placeholder || ""}
+            onChange={(e) => onUpdate(field.id, { placeholder: e.target.value })}
+            placeholder="Input placeholder"
+            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
+        </div>
+
+        <div className="sm:col-span-2 flex flex-col justify-end">
+          <label className="flex items-center gap-2 cursor-pointer py-1.5 select-none">
+            <input
+              type="checkbox"
+              checked={Boolean(field.required)}
+              onChange={(e) => onUpdate(field.id, { required: e.target.checked })}
+              className="w-4 h-4 rounded text-brand-500 focus:ring-brand-500 accent-brand-500 cursor-pointer"
+            />
+            <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Required</span>
+          </label>
+        </div>
+      </div>
+
+      {(field.type === "select" || field.type === "radio") && (
+        <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60 text-xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Configured Choices:</span>
+            <button
+              type="button"
+              onClick={() => {
+                const current = field.options || [];
+                onUpdate(field.id, { options: [...current, `Option ${current.length + 1}`] });
+              }}
+              className="text-[10px] font-bold text-brand-500 hover:text-brand-600 flex items-center gap-1"
+            >
+              <i className="fa-solid fa-plus text-[9px]"></i>
+              <span>Add Choice</span>
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {(field.options || []).map((opt, optIndex) => (
+              <div
+                key={optIndex}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs"
+              >
+                <input
+                  type="text"
+                  value={opt}
+                  onChange={(e) => {
+                    const next = [...(field.options || [])];
+                    next[optIndex] = e.target.value;
+                    onUpdate(field.id, { options: next });
+                  }}
+                  className="bg-transparent border-none focus:outline-none text-xs text-slate-900 dark:text-white w-24"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = (field.options || []).filter((_, i) => i !== optIndex);
+                    onUpdate(field.id, { options: next });
+                  }}
+                  className="text-slate-400 hover:text-rose-500 ml-1"
+                >
+                  <i className="fa-solid fa-xmark text-[10px]"></i>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
 export const FormsStudioView: React.FC = () => {
   const { projectState, toast } = useOlio();
   const selectedProjectId = projectState.selectedProject?.id;
@@ -123,7 +454,10 @@ export const FormsStudioView: React.FC = () => {
   const [records, setRecords] = useState<FormRecord[]>([]);
   const [totalRecords, setTotalRecords] = useState(0);
   const [isLoadingRecords, setIsLoadingRecords] = useState(false);
+  const [recordSearchInput, setRecordSearchInput] = useState("");
   const [recordSearch, setRecordSearch] = useState("");
+  const [recordsPage, setRecordsPage] = useState(1);
+  const [recordsPageSize, setRecordsPageSize] = useState(FORM_RECORDS_DEFAULT_LIMIT);
   const [selectedRecordDetail, setSelectedRecordDetail] = useState<FormRecord | null>(null);
 
   // Live preview test state
@@ -131,28 +465,51 @@ export const FormsStudioView: React.FC = () => {
   const [previewSubmitted, setPreviewSubmitted] = useState(false);
   const [isSubmittingPreview, setIsSubmittingPreview] = useState(false);
 
-  // Load records for currently active form
-  const loadRecords = useCallback(async () => {
-    if (!activeForm?.id) {
-      setRecords([]);
-      setTotalRecords(0);
-      return;
-    }
-    setIsLoadingRecords(true);
-    try {
-      const res = await fetchFormRecordsApi(activeForm.id, selectedProjectId);
-      setRecords(res.data || []);
-      setTotalRecords(res.total || 0);
-    } catch {
-      setRecords([]);
-      setTotalRecords(0);
-    } finally {
-      setIsLoadingRecords(false);
-    }
-  }, [activeForm?.id, selectedProjectId]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setRecordSearch(recordSearchInput);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [recordSearchInput]);
 
   useEffect(() => {
-    loadRecords();
+    setRecordsPage(1);
+    setRecordSearchInput("");
+    setRecordSearch("");
+  }, [activeForm?.id]);
+
+  const loadRecords = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!activeForm?.id) {
+        setRecords([]);
+        setTotalRecords(0);
+        return;
+      }
+      setIsLoadingRecords(true);
+      try {
+        const res = await fetchFormRecordsApi(activeForm.id, selectedProjectId, {
+          skip: (recordsPage - 1) * recordsPageSize,
+          limit: recordsPageSize,
+          signal,
+        });
+        if (signal?.aborted) return;
+        setRecords(res.data || []);
+        setTotalRecords(res.total || 0);
+      } catch (err) {
+        if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
+        setRecords([]);
+        setTotalRecords(0);
+      } finally {
+        if (!signal?.aborted) setIsLoadingRecords(false);
+      }
+    },
+    [activeForm?.id, selectedProjectId, recordsPage, recordsPageSize]
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadRecords(controller.signal);
+    return () => controller.abort();
   }, [loadRecords]);
 
   // Filter forms list
@@ -167,16 +524,20 @@ export const FormsStudioView: React.FC = () => {
     );
   }, [forms, searchQuery]);
 
-  // Filter form records
+  const recordSearchIndex = useMemo(
+    () =>
+      records.map((r) => ({
+        record: r,
+        haystack: `${JSON.stringify(r.data || {})} ${new Date(r.created_at).toLocaleString()}`.toLowerCase(),
+      })),
+    [records]
+  );
+
   const filteredRecords = useMemo(() => {
     if (!recordSearch.trim()) return records;
     const q = recordSearch.toLowerCase();
-    return records.filter((r) => {
-      const jsonStr = JSON.stringify(r.data || {}).toLowerCase();
-      const dateStr = new Date(r.created_at).toLocaleString().toLowerCase();
-      return jsonStr.includes(q) || dateStr.includes(q);
-    });
-  }, [records, recordSearch]);
+    return recordSearchIndex.filter((item) => item.haystack.includes(q)).map((item) => item.record);
+  }, [records, recordSearch, recordSearchIndex]);
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,11 +556,37 @@ export const FormsStudioView: React.FC = () => {
     }
   };
 
-  const handleCopy = (text: string, key: string) => {
+  const handleCopy = useCallback((text: string, key: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 2000);
-  };
+    window.setTimeout(() => setCopiedKey(null), 2000);
+  }, []);
+
+  const handleSelectForm = useCallback(
+    (id: string) => {
+      selectForm(id);
+      setRecordsPage(1);
+      setActiveTab("records");
+    },
+    [selectForm]
+  );
+
+  const handleRecordsPageChange = useCallback((page: number) => {
+    setRecordsPage(page);
+  }, []);
+
+  const handleRecordsPageSizeChange = useCallback((size: number) => {
+    setRecordsPageSize(Math.min(FORM_RECORDS_MAX_LIMIT, size));
+    setRecordsPage(1);
+  }, []);
+
+  const handleViewRecord = useCallback((record: FormRecord) => {
+    setSelectedRecordDetail(record);
+  }, []);
+
+  const handlePreviewFieldChange = useCallback((name: string, value: any) => {
+    setPreviewValues((prev) => ({ ...prev, [name]: value }));
+  }, []);
 
   const handleQuickAddField = (fieldType: FormFieldType) => {
     const meta = AVAILABLE_FIELD_TYPES.find((f) => f.type === fieldType);
@@ -222,13 +609,19 @@ export const FormsStudioView: React.FC = () => {
   const handlePreviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeForm?.id) return;
+    const payload = buildFormSubmissionData(activeForm.fields, previewValues);
     setIsSubmittingPreview(true);
     try {
-      const newRecord = await createFormRecordApi(activeForm.id, previewValues, selectedProjectId);
-      setRecords((prev) => [newRecord, ...prev]);
-      setTotalRecords((prev) => prev + 1);
+      const newRecord = await createFormRecordApi(activeForm.id, payload, selectedProjectId);
       setPreviewSubmitted(true);
       toast?.showToast("Form response submitted and recorded!", "success");
+      if (recordsPage === 1) {
+        setRecords((prev) => [newRecord, ...prev].slice(0, recordsPageSize));
+        setTotalRecords((prev) => prev + 1);
+      } else {
+        setRecordsPage(1);
+        setTotalRecords((prev) => prev + 1);
+      }
     } catch (err: any) {
       toast?.showToast(err.message || "Failed to submit response", "error");
     } finally {
@@ -236,14 +629,18 @@ export const FormsStudioView: React.FC = () => {
     }
   };
 
-  // Delete a form submission record
-  const handleDeleteRecord = async (recordId: string) => {
+  const handleDeleteRecord = useCallback(async (recordId: string) => {
     if (!activeForm?.id) return;
     if (!confirm("Are you sure you want to delete this submission record?")) return;
     try {
       await deleteFormRecordApi(activeForm.id, recordId, selectedProjectId);
       setRecords((prev) => prev.filter((r) => r.id !== recordId));
-      setTotalRecords((prev) => Math.max(0, prev - 1));
+      setTotalRecords((prev) => {
+        const next = Math.max(0, prev - 1);
+        const maxPage = Math.max(1, Math.ceil(next / recordsPageSize));
+        setRecordsPage((page) => Math.min(page, maxPage));
+        return next;
+      });
       if (selectedRecordDetail?.id === recordId) {
         setSelectedRecordDetail(null);
       }
@@ -251,89 +648,54 @@ export const FormsStudioView: React.FC = () => {
     } catch (err: any) {
       toast?.showToast(err.message || "Failed to delete record.", "error");
     }
-  };
+  }, [activeForm?.id, selectedProjectId, selectedRecordDetail?.id, recordsPageSize, toast]);
 
-  // Export records to CSV
-  const handleExportCsv = () => {
-    if (!activeForm || records.length === 0) return;
-    const fieldCols = activeForm.fields;
-    const headers = [...fieldCols.map((f) => `"${(f.label || f.name).replace(/"/g, '""')}"`), '"Submitted At"', '"Record ID"'];
-    const rows = records.map((r) => [
-      ...fieldCols.map((f) => {
-        const val = r.data?.[f.name];
-        if (val === undefined || val === null) return '""';
-        return `"${String(val).replace(/"/g, '""')}"`;
-      }),
-      `"${new Date(r.created_at).toLocaleString().replace(/"/g, '""')}"`,
-      `"${r.id}"`,
-    ]);
+  const handleExportCsv = useCallback(async () => {
+    if (!activeForm) return;
+    try {
+      const exportRows: FormRecord[] = [];
+      let skip = 0;
+      let total = Number.POSITIVE_INFINITY;
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${activeForm.slug}_records_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const renderCellValue = (record: FormRecord, field: FormField) => {
-    const rawVal = record.data?.[field.name];
-    if (rawVal === undefined || rawVal === null || rawVal === "") {
-      return <span className="text-slate-400 dark:text-slate-600 font-mono text-[10px]">—</span>;
-    }
-
-    if (typeof rawVal === "boolean") {
-      return (
-        <span
-          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-            rawVal
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-              : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-          }`}
-        >
-          {rawVal ? "True" : "False"}
-        </span>
-      );
-    }
-
-    if (field.type === "date") {
-      try {
-        return new Date(rawVal).toLocaleDateString();
-      } catch {
-        return String(rawVal);
+      while (skip < total) {
+        const page = await fetchFormRecordsApi(activeForm.id, selectedProjectId, {
+          skip,
+          limit: FORM_RECORDS_MAX_LIMIT,
+        });
+        exportRows.push(...page.data);
+        total = page.total;
+        if (page.data.length === 0) break;
+        skip += page.data.length;
       }
-    }
 
-    if (field.type === "url") {
-      return (
-        <a
-          href={String(rawVal)}
-          target="_blank"
-          rel="noreferrer"
-          className="text-brand-500 hover:underline flex items-center gap-1 truncate max-w-[140px]"
-        >
-          <span>{String(rawVal)}</span>
-          <i className="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
-        </a>
-      );
-    }
+      if (exportRows.length === 0) return;
 
-    if (field.type === "email") {
-      return (
-        <a href={`mailto:${rawVal}`} className="text-brand-500 hover:underline truncate max-w-[150px] block">
-          {String(rawVal)}
-        </a>
-      );
-    }
+      const fieldCols = activeForm.fields;
+      const headers = [...fieldCols.map((f) => `"${(f.label || f.name).replace(/"/g, '""')}"`), '"Submitted At"', '"Record ID"'];
+      const rows = exportRows.map((r) => [
+        ...fieldCols.map((f) => {
+          const val = r.data?.[f.name] ?? r.data?.[f.id];
+          if (val === undefined || val === null) return '""';
+          return `"${String(val).replace(/"/g, '""')}"`;
+        }),
+        `"${new Date(r.created_at).toLocaleString().replace(/"/g, '""')}"`,
+        `"${r.id}"`,
+      ]);
 
-    return (
-      <span className="truncate max-w-[160px] block text-slate-800 dark:text-slate-200" title={String(rawVal)}>
-        {String(rawVal)}
-      </span>
-    );
-  };
+      const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${activeForm.slug}_records_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast?.showToast(err.message || "Failed to export records", "error");
+    }
+  }, [activeForm, selectedProjectId, toast]);
 
   const apiBaseUrl = APP_CONFIG.apiBaseUrl;
 
@@ -392,52 +754,14 @@ export const FormsStudioView: React.FC = () => {
                   Loading forms...
                 </div>
               ) : filteredForms.length > 0 ? (
-                filteredForms.map((form) => {
-                  const isSelected = form.id === activeFormId;
-                  return (
-                    <button
-                      key={form.id}
-                      type="button"
-                      onClick={() => {
-                        selectForm(form.id);
-                        setActiveTab("records");
-                      }}
-                      className={`w-full text-left p-3 rounded-xl transition flex items-center justify-between gap-3 group ${
-                        isSelected
-                          ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
-                          : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
-                      }`}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <i
-                            className={`fa-solid fa-rectangle-list text-xs ${
-                              isSelected ? "text-white" : "text-brand-500"
-                            }`}
-                          ></i>
-                          <span className="font-bold text-xs truncate">{form.name}</span>
-                        </div>
-                        <p
-                          className={`text-[10px] truncate mt-0.5 ${
-                            isSelected ? "text-white/80" : "text-slate-400"
-                          }`}
-                        >
-                          /{form.slug}
-                        </p>
-                      </div>
-
-                      <span
-                        className={`text-[10px] font-mono px-2 py-0.5 rounded-full shrink-0 ${
-                          isSelected
-                            ? "bg-white/20 text-white"
-                            : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-                        }`}
-                      >
-                        {form.fields.length} {form.fields.length === 1 ? "field" : "fields"}
-                      </span>
-                    </button>
-                  );
-                })
+                filteredForms.map((form) => (
+                  <FormSidebarItem
+                    key={form.id}
+                    form={form}
+                    isSelected={form.id === activeFormId}
+                    onSelect={handleSelectForm}
+                  />
+                ))
               ) : (
                 <div className="py-8 text-center px-2">
                   <i className="fa-solid fa-file-circle-question text-slate-400 text-2xl mb-2 block"></i>
@@ -584,8 +908,8 @@ export const FormsStudioView: React.FC = () => {
                         <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
                         <input
                           type="text"
-                          value={recordSearch}
-                          onChange={(e) => setRecordSearch(e.target.value)}
+                          value={recordSearchInput}
+                          onChange={(e) => setRecordSearchInput(e.target.value)}
                           placeholder="Search form records..."
                           className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-500"
                         />
@@ -595,7 +919,7 @@ export const FormsStudioView: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={loadRecords}
+                        onClick={() => { void loadRecords(); }}
                         disabled={isLoadingRecords}
                         className="px-3 py-1.5 rounded-xl glass-card text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-brand-500 flex items-center gap-1.5 transition disabled:opacity-50"
                         title="Refresh records"
@@ -611,7 +935,7 @@ export const FormsStudioView: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleExportCsv}
-                        disabled={records.length === 0}
+                        disabled={totalRecords === 0}
                         className="px-3 py-1.5 rounded-xl glass-card text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-brand-500 flex items-center gap-1.5 transition disabled:opacity-40"
                         title="Export records to CSV"
                       >
@@ -661,42 +985,25 @@ export const FormsStudioView: React.FC = () => {
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/40">
                           {filteredRecords.map((record) => (
-                            <tr
+                            <FormRecordRow
                               key={record.id}
-                              className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition"
-                            >
-                              {activeForm.fields.map((field) => (
-                                <td key={field.id} className="py-2.5 px-3 text-xs">
-                                  {renderCellValue(record, field)}
-                                </td>
-                              ))}
-                              <td className="py-2.5 px-3 text-[11px] text-slate-400 font-mono whitespace-nowrap">
-                                {new Date(record.created_at).toLocaleString()}
-                              </td>
-                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedRecordDetail(record)}
-                                    className="w-7 h-7 rounded-lg text-slate-400 hover:text-brand-500 hover:bg-brand-500/10 transition flex items-center justify-center"
-                                    title="View JSON details"
-                                  >
-                                    <i className="fa-solid fa-code text-xs"></i>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteRecord(record.id)}
-                                    className="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition flex items-center justify-center"
-                                    title="Delete Submission"
-                                  >
-                                    <i className="fa-solid fa-trash text-xs"></i>
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
+                              record={record}
+                              fields={activeForm.fields}
+                              onView={handleViewRecord}
+                              onDelete={handleDeleteRecord}
+                            />
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  ) : recordSearch.trim() ? (
+                    <div className="p-10 text-center rounded-xl bg-slate-50/50 dark:bg-slate-800/30 border border-slate-200/50 dark:border-slate-800/50 space-y-2">
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        No matching records on this page
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Search only applies to the current page. Clear search or switch pages.
+                      </p>
                     </div>
                   ) : (
                     <div className="p-10 text-center rounded-xl bg-slate-50/50 dark:bg-slate-800/30 border border-slate-200/50 dark:border-slate-800/50 space-y-2">
@@ -718,6 +1025,19 @@ export const FormsStudioView: React.FC = () => {
                         <span>Submit a Test Record</span>
                       </button>
                     </div>
+                  )}
+
+                  {totalRecords > 0 && (
+                    <Pagination
+                      currentPage={recordsPage}
+                      totalItems={totalRecords}
+                      pageSize={recordsPageSize}
+                      pageSizeOptions={FORM_RECORD_PAGE_SIZES}
+                      onPageChange={handleRecordsPageChange}
+                      onPageSizeChange={handleRecordsPageSizeChange}
+                      isLoading={isLoadingRecords}
+                      itemLabel="submissions"
+                    />
                   )}
                 </div>
               )}
@@ -749,186 +1069,17 @@ export const FormsStudioView: React.FC = () => {
                   {/* Fields list */}
                   {activeForm.fields.length > 0 ? (
                     <div className="space-y-3">
-                      {activeForm.fields.map((field, index) => {
-                        const meta = AVAILABLE_FIELD_TYPES.find((m) => m.type === field.type);
-                        return (
-                          <div
-                            key={field.id}
-                            className="p-4 rounded-xl bg-white dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/70 shadow-sm space-y-3 hover:border-brand-500/40 transition"
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="w-7 h-7 rounded-lg bg-brand-500/10 text-brand-500 flex items-center justify-center text-xs shrink-0">
-                                  <i className={`fa-solid ${meta?.icon || "fa-font"}`}></i>
-                                </div>
-                                <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                                  #{index + 1}. {field.label}
-                                </span>
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
-                                  {field.type}
-                                </span>
-                                {field.required && (
-                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-500">
-                                    Required
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Ordering and removal */}
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  disabled={index === 0}
-                                  onClick={() => moveField(index, index - 1)}
-                                  className="w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white disabled:opacity-30 transition flex items-center justify-center"
-                                  title="Move Up"
-                                >
-                                  <i className="fa-solid fa-arrow-up text-xs"></i>
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={index === activeForm.fields.length - 1}
-                                  onClick={() => moveField(index, index + 1)}
-                                  className="w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white disabled:opacity-30 transition flex items-center justify-center"
-                                  title="Move Down"
-                                >
-                                  <i className="fa-solid fa-arrow-down text-xs"></i>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => removeField(field.id)}
-                                  className="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition flex items-center justify-center"
-                                  title="Delete Field"
-                                >
-                                  <i className="fa-solid fa-trash text-xs"></i>
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Inline Configuration Inputs */}
-                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-                              {/* Label */}
-                              <div className="sm:col-span-4">
-                                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                                  Field Label
-                                </label>
-                                <input
-                                  type="text"
-                                  value={field.label}
-                                  onChange={(e) => updateField(field.id, { label: e.target.value })}
-                                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-brand-500"
-                                />
-                              </div>
-
-                              {/* Key/Name */}
-                              <div className="sm:col-span-3">
-                                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                                  Field Key (Payload ID)
-                                </label>
-                                <input
-                                  type="text"
-                                  value={field.name}
-                                  onChange={(e) =>
-                                    updateField(field.id, {
-                                      name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""),
-                                    })
-                                  }
-                                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
-                                />
-                              </div>
-
-                              {/* Placeholder */}
-                              <div className="sm:col-span-3">
-                                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                                  Placeholder Text
-                                </label>
-                                <input
-                                  type="text"
-                                  value={field.placeholder || ""}
-                                  onChange={(e) =>
-                                    updateField(field.id, { placeholder: e.target.value })
-                                  }
-                                  placeholder="Input placeholder"
-                                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
-                                />
-                              </div>
-
-                              {/* Required Toggle */}
-                              <div className="sm:col-span-2 flex flex-col justify-end">
-                                <label className="flex items-center gap-2 cursor-pointer py-1.5 select-none">
-                                  <input
-                                    type="checkbox"
-                                    checked={Boolean(field.required)}
-                                    onChange={(e) =>
-                                      updateField(field.id, { required: e.target.checked })
-                                    }
-                                    className="w-4 h-4 rounded text-brand-500 focus:ring-brand-500 accent-brand-500 cursor-pointer"
-                                  />
-                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                                    Required
-                                  </span>
-                                </label>
-                              </div>
-                            </div>
-
-                            {/* Dropdown / Radio Options Configuration */}
-                            {(field.type === "select" || field.type === "radio") && (
-                              <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60 text-xs space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                                    Configured Choices:
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const current = field.options || [];
-                                      updateField(field.id, {
-                                        options: [...current, `Option ${current.length + 1}`],
-                                      });
-                                    }}
-                                    className="text-[10px] font-bold text-brand-500 hover:text-brand-600 flex items-center gap-1"
-                                  >
-                                    <i className="fa-solid fa-plus text-[9px]"></i>
-                                    <span>Add Choice</span>
-                                  </button>
-                                </div>
-
-                                <div className="flex flex-wrap gap-2">
-                                  {(field.options || []).map((opt, optIndex) => (
-                                    <div
-                                      key={optIndex}
-                                      className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs"
-                                    >
-                                      <input
-                                        type="text"
-                                        value={opt}
-                                        onChange={(e) => {
-                                          const next = [...(field.options || [])];
-                                          next[optIndex] = e.target.value;
-                                          updateField(field.id, { options: next });
-                                        }}
-                                        className="bg-transparent border-none focus:outline-none text-xs text-slate-900 dark:text-white w-24"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const next = (field.options || []).filter(
-                                            (_, i) => i !== optIndex
-                                          );
-                                          updateField(field.id, { options: next });
-                                        }}
-                                        className="text-slate-400 hover:text-rose-500 ml-1"
-                                      >
-                                        <i className="fa-solid fa-xmark text-[10px]"></i>
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                      {activeForm.fields.map((field, index) => (
+                        <FieldEditorCard
+                          key={field.id}
+                          field={field}
+                          index={index}
+                          isLast={index === activeForm.fields.length - 1}
+                          onUpdate={updateField}
+                          onMove={moveField}
+                          onRemove={removeField}
+                        />
+                      ))}
                     </div>
                   ) : (
                     <div className="p-8 text-center rounded-xl bg-slate-50/50 dark:bg-slate-800/30 border border-slate-200/50 dark:border-slate-800/50 space-y-2">
@@ -1069,24 +1220,14 @@ export const FormsStudioView: React.FC = () => {
                                 placeholder={field.placeholder || ""}
                                 rows={3}
                                 value={previewValues[field.name] || ""}
-                                onChange={(e) =>
-                                  setPreviewValues({
-                                    ...previewValues,
-                                    [field.name]: e.target.value,
-                                  })
-                                }
+                                onChange={(e) => handlePreviewFieldChange(field.name, e.target.value)}
                                 className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
                               />
                             ) : field.type === "select" ? (
                               <select
                                 required={field.required}
                                 value={previewValues[field.name] || ""}
-                                onChange={(e) =>
-                                  setPreviewValues({
-                                    ...previewValues,
-                                    [field.name]: e.target.value,
-                                  })
-                                }
+                                onChange={(e) => handlePreviewFieldChange(field.name, e.target.value)}
                                 className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
                               >
                                 <option value="">Select an option...</option>
@@ -1108,12 +1249,7 @@ export const FormsStudioView: React.FC = () => {
                                       name={field.name}
                                       value={opt}
                                       checked={previewValues[field.name] === opt}
-                                      onChange={(e) =>
-                                        setPreviewValues({
-                                          ...previewValues,
-                                          [field.name]: e.target.value,
-                                        })
-                                      }
+                                      onChange={(e) => handlePreviewFieldChange(field.name, e.target.value)}
                                       className="text-brand-500 focus:ring-brand-500"
                                     />
                                     <span>{opt}</span>
@@ -1125,12 +1261,7 @@ export const FormsStudioView: React.FC = () => {
                                 <input
                                   type="checkbox"
                                   checked={Boolean(previewValues[field.name])}
-                                  onChange={(e) =>
-                                    setPreviewValues({
-                                      ...previewValues,
-                                      [field.name]: e.target.checked,
-                                    })
-                                  }
+                                  onChange={(e) => handlePreviewFieldChange(field.name, e.target.checked)}
                                   className="w-4 h-4 rounded text-brand-500 focus:ring-brand-500 accent-brand-500"
                                 />
                                 <span>I agree to provide this information</span>
@@ -1153,12 +1284,7 @@ export const FormsStudioView: React.FC = () => {
                                 required={field.required}
                                 placeholder={field.placeholder || ""}
                                 value={previewValues[field.name] || ""}
-                                onChange={(e) =>
-                                  setPreviewValues({
-                                    ...previewValues,
-                                    [field.name]: e.target.value,
-                                  })
-                                }
+                                onChange={(e) => handlePreviewFieldChange(field.name, e.target.value)}
                                 className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
                               />
                             )}

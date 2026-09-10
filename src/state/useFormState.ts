@@ -9,6 +9,18 @@ import {
   deleteFormApi,
 } from "@/api/form.api";
 
+function cloneForm(form: FormSchema): FormSchema {
+  return typeof structuredClone === "function"
+    ? structuredClone(form)
+    : JSON.parse(JSON.stringify(form));
+}
+
+function persistForms(storageKey: string, next: FormSchema[]) {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(next));
+  } catch (_) {}
+}
+
 export function useFormState(
   projectId?: string,
   showToast?: (msg: string, type?: "success" | "error" | "info") => void
@@ -39,10 +51,8 @@ export function useFormState(
       if (apiForms && apiForms.length > 0) {
         setForms(apiForms);
         setActiveFormId(apiForms[0].id);
-        setActiveForm(JSON.parse(JSON.stringify(apiForms[0])));
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(apiForms));
-        } catch (_) {}
+        setActiveForm(cloneForm(apiForms[0]));
+        persistForms(storageKey, apiForms);
       } else {
         // Check local storage fallback if empty or offline
         const stored = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
@@ -52,7 +62,7 @@ export function useFormState(
             if (Array.isArray(parsed) && parsed.length > 0) {
               setForms(parsed);
               setActiveFormId(parsed[0].id);
-              setActiveForm(JSON.parse(JSON.stringify(parsed[0])));
+              setActiveForm(cloneForm(parsed[0]));
             } else {
               setForms([]);
               setActiveForm(null);
@@ -86,15 +96,14 @@ export function useFormState(
       const found = forms.find((f) => f.id === id);
       if (found) {
         setActiveFormId(found.id);
-        setActiveForm(JSON.parse(JSON.stringify(found)));
+        setActiveForm(cloneForm(found));
         setIsDirty(false);
       }
     },
     [forms]
   );
 
-  // Create new form
-  const createForm = async (name: string, description?: string) => {
+  const createForm = useCallback(async (name: string, description?: string) => {
     try {
       const created = await createFormApi({
         name,
@@ -136,26 +145,22 @@ export function useFormState(
       const updatedForms = [created, ...forms];
       setForms(updatedForms);
       setActiveFormId(created.id);
-      setActiveForm(JSON.parse(JSON.stringify(created)));
+      setActiveForm(cloneForm(created));
       setIsDirty(false);
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(updatedForms));
-      } catch (_) {}
+      persistForms(storageKey, updatedForms);
       notify("success", `Form "${created.name}" created successfully.`);
       return created;
     } catch (err: any) {
       notify("error", err.message || "Failed to create form.");
       throw err;
     }
-  };
+  }, [forms, projectId, storageKey, notify]);
 
-  // Update form metadata (name, description, settings)
-  const updateActiveFormMeta = (updates: {
+  const updateActiveFormMeta = useCallback((updates: {
     name?: string;
     description?: string;
     settings?: Partial<FormSettings>;
   }) => {
-    if (!activeForm) return;
     setActiveForm((prev) => {
       if (!prev) return prev;
       return {
@@ -169,11 +174,9 @@ export function useFormState(
       };
     });
     setIsDirty(true);
-  };
+  }, []);
 
-  // Add field to active form
-  const addField = (fieldData: Omit<FormField, "id">) => {
-    if (!activeForm) return;
+  const addField = useCallback((fieldData: Omit<FormField, "id">) => {
     const newField: FormField = {
       ...fieldData,
       id: `field_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -187,11 +190,9 @@ export function useFormState(
     });
     setIsDirty(true);
     notify("info", `Field "${newField.label}" added.`);
-  };
+  }, [notify]);
 
-  // Update existing field
-  const updateField = (fieldId: string, updates: Partial<FormField>) => {
-    if (!activeForm) return;
+  const updateField = useCallback((fieldId: string, updates: Partial<FormField>) => {
     setActiveForm((prev) => {
       if (!prev) return prev;
       return {
@@ -200,11 +201,9 @@ export function useFormState(
       };
     });
     setIsDirty(true);
-  };
+  }, []);
 
-  // Remove field
-  const removeField = (fieldId: string) => {
-    if (!activeForm) return;
+  const removeField = useCallback((fieldId: string) => {
     setActiveForm((prev) => {
       if (!prev) return prev;
       return {
@@ -213,16 +212,13 @@ export function useFormState(
       };
     });
     setIsDirty(true);
-  };
+  }, []);
 
-  // Move field order (up or down)
-  const moveField = (fromIndex: number, toIndex: number) => {
-    if (!activeForm) return;
-    if (fromIndex < 0 || fromIndex >= activeForm.fields.length) return;
-    if (toIndex < 0 || toIndex >= activeForm.fields.length) return;
-
+  const moveField = useCallback((fromIndex: number, toIndex: number) => {
     setActiveForm((prev) => {
       if (!prev) return prev;
+      if (fromIndex < 0 || fromIndex >= prev.fields.length) return prev;
+      if (toIndex < 0 || toIndex >= prev.fields.length) return prev;
       const reordered = [...prev.fields];
       const [moved] = reordered.splice(fromIndex, 1);
       reordered.splice(toIndex, 0, moved);
@@ -232,10 +228,9 @@ export function useFormState(
       };
     });
     setIsDirty(true);
-  };
+  }, []);
 
-  // Save changes to backend
-  const saveForm = async () => {
+  const saveForm = useCallback(async () => {
     if (!activeForm) return;
     try {
       const updated = await updateFormApi(
@@ -252,19 +247,16 @@ export function useFormState(
 
       const nextForms = forms.map((f) => (f.id === updated.id ? updated : f));
       setForms(nextForms);
-      setActiveForm(JSON.parse(JSON.stringify(updated)));
+      setActiveForm(cloneForm(updated));
       setIsDirty(false);
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(nextForms));
-      } catch (_) {}
+      persistForms(storageKey, nextForms);
       notify("success", "Form saved successfully!");
     } catch (err: any) {
       notify("error", err.message || "Failed to save form.");
     }
-  };
+  }, [activeForm, forms, projectId, storageKey, notify]);
 
-  // Delete active or specified form
-  const deleteForm = async (formId: string) => {
+  const deleteForm = useCallback(async (formId: string) => {
     try {
       await deleteFormApi(formId, projectId);
       const remaining = forms.filter((f) => f.id !== formId);
@@ -272,21 +264,19 @@ export function useFormState(
       if (activeFormId === formId) {
         if (remaining.length > 0) {
           setActiveFormId(remaining[0].id);
-          setActiveForm(JSON.parse(JSON.stringify(remaining[0])));
+          setActiveForm(cloneForm(remaining[0]));
         } else {
           setActiveFormId("");
           setActiveForm(null);
         }
       }
       setIsDirty(false);
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(remaining));
-      } catch (_) {}
+      persistForms(storageKey, remaining);
       notify("success", "Form deleted successfully.");
     } catch (err: any) {
       notify("error", err.message || "Failed to delete form.");
     }
-  };
+  }, [forms, activeFormId, projectId, storageKey, notify]);
 
   return {
     forms,

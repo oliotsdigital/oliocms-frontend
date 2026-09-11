@@ -195,6 +195,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
             Menus
           </span>
         </Link>
+
+        {/* Forms */}
+        <Link
+          href="/forms"
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all group relative ${
+            isNavActive("/forms")
+              ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
+              : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white"
+          }`}
+        >
+          <i className="fa-solid fa-rectangle-list text-sm w-5 text-center"></i>
+          <span
+            className={`whitespace-nowrap transition-opacity duration-200 ${
+              sidebarExpanded ? "opacity-100" : "opacity-0 w-0 hidden"
+            }`}
+          >
+            Forms
+          </span>
+        </Link>
       </nav>
 
       {/* Bottom Profile Icon Section (ALWAYS ENABLED) */}

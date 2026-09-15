@@ -2,10 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { CollectionRecord, CollectionSchema } from "@/models/collection.model";
+import { CollectionRecord, CollectionSchema, SeoMetadata } from "@/models/collection.model";
 import { updateCollectionRecordApi } from "@/api/collection.api";
 import { MediaFieldInput } from "./MediaFieldInput";
 import { EnumerationFieldInput } from "./EnumerationFieldInput";
+import { SeoFormSection } from "./SeoFormSection";
 import { useOlio } from "@/state/OlioProvider";
 
 interface EditRecordModalProps {
@@ -32,10 +33,15 @@ export const EditRecordModal: React.FC<EditRecordModalProps> = ({
     handleSubmit,
     control,
     reset,
+    watch,
     formState: { errors },
   } = useForm<Record<string, any>>({
     defaultValues: record?.data || {},
   });
+
+  const [seoData, setSeoData] = useState<SeoMetadata>({});
+  const titleValue = watch("title") || record?.data?.title || record?.data?.name || "";
+  const slugValue = watch("slug") || record?.data?.slug || "";
 
   // Reset form with current record data when record changes
   useEffect(() => {
@@ -50,6 +56,7 @@ export const EditRecordModal: React.FC<EditRecordModalProps> = ({
         }
       });
       reset(initialVals);
+      setSeoData((record.data?.seo as SeoMetadata) || {});
       setServerError(null);
     }
   }, [record, schema, reset]);
@@ -75,6 +82,15 @@ export const EditRecordModal: React.FC<EditRecordModalProps> = ({
       }
     });
 
+    cleanedData.seo = {
+      title: seoData.title?.trim() || null,
+      description: seoData.description?.trim() || null,
+      keywords: seoData.keywords?.trim() || null,
+      og_image: seoData.og_image?.trim() || null,
+      canonical_url: seoData.canonical_url?.trim() || null,
+      no_index: Boolean(seoData.no_index),
+    };
+
     const res = await updateCollectionRecordApi(schema.id, record.id, cleanedData);
     setSubmitting(false);
 
@@ -90,7 +106,7 @@ export const EditRecordModal: React.FC<EditRecordModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[120] bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-      <div className="relative w-full max-w-2xl glass-panel rounded-2xl p-6 shadow-2xl border border-slate-200/50 dark:border-slate-800/50 max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-3xl glass-panel rounded-2xl p-6 shadow-2xl border border-slate-200/50 dark:border-slate-800/50 max-h-[90vh] flex flex-col">
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-200/40 dark:border-slate-800/40">
           <div>
@@ -257,6 +273,19 @@ export const EditRecordModal: React.FC<EditRecordModalProps> = ({
               </div>
             );
           })}
+
+          {/* Built-in SEO & Social Section */}
+          <div className="pt-2">
+            <SeoFormSection
+              seo={seoData}
+              onChange={setSeoData}
+              fallbackTitle={typeof titleValue === "string" ? titleValue : ""}
+              fallbackSlug={typeof slugValue === "string" ? slugValue : ""}
+              collectionSlug={schema.slug}
+              projectId={schema.project_id}
+              disabled={submitting}
+            />
+          </div>
 
           <div className="pt-4 border-t border-slate-200/40 dark:border-slate-800/40 flex items-center justify-end gap-3">
             <button

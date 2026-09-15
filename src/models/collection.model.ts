@@ -48,6 +48,15 @@ export interface CollectionSchema {
   updated_at: string;
 }
 
+export interface SeoMetadata {
+  title?: string | null;
+  description?: string | null;
+  keywords?: string | null;
+  og_image?: string | null;
+  canonical_url?: string | null;
+  no_index?: boolean;
+}
+
 export interface CollectionRecord {
   id: string;
   data: Record<string, any>;

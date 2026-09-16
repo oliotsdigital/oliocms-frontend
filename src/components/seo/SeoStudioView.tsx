@@ -5,7 +5,7 @@ import { CollectionRecord, CollectionSchema, SeoMetadata } from "@/models/collec
 import { fetchCollectionRecordsApi } from "@/api/collection.api";
 import { useOlio } from "@/state/OlioProvider";
 import { resolveMediaUrl } from "@/utils/media";
-import { EditRecordModal } from "@/components/collections/EditRecordModal";
+import { EditSeoModal } from "./EditSeoModal";
 import { FrontendSeoHelpModal } from "./FrontendSeoHelpModal";
 
 export const SeoStudioView: React.FC = () => {
@@ -18,10 +18,14 @@ export const SeoStudioView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [filterTab, setFilterTab] = useState<"all" | "configured" | "fallback" | "noindex">("all");
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
   // Modals
   const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
   const [editingRecord, setEditingRecord] = useState<CollectionRecord | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [isEditSeoModalOpen, setIsEditSeoModalOpen] = useState<boolean>(false);
 
   // Auto-select first collection if available
   useEffect(() => {
@@ -48,6 +52,11 @@ export const SeoStudioView: React.FC = () => {
       loadRecords(selectedCollectionId);
     }
   }, [selectedCollectionId]);
+
+  // Reset pagination when collection, search, or filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCollectionId, searchQuery, filterTab, pageSize]);
 
   // Helper to extract SEO object from record
   const getRecordSeo = (record: CollectionRecord): SeoMetadata => {
@@ -123,6 +132,17 @@ export const SeoStudioView: React.FC = () => {
       return true;
     });
   }, [records, searchQuery, filterTab]);
+
+  // Pagination Calculations
+  const totalPages = Math.ceil(filteredRecords.length / pageSize) || 1;
+
+  const paginatedRecords = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredRecords.slice(startIndex, startIndex + pageSize);
+  }, [filteredRecords, currentPage, pageSize]);
+
+  const startIndexDisplay = filteredRecords.length > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+  const endIndexDisplay = Math.min(currentPage * pageSize, filteredRecords.length);
 
   return (
     <div className="space-y-6">
@@ -308,16 +328,33 @@ export const SeoStudioView: React.FC = () => {
               </button>
             </div>
 
-            {/* Search Input */}
-            <div className="relative min-w-[240px]">
-              <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search record title or slug..."
-                className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-              />
+            {/* Search & Page Size Selector */}
+            <div className="flex items-center gap-3">
+              <div className="relative min-w-[220px]">
+                <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search record title or slug..."
+                  className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+
+              {/* Items Per Page Selector */}
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 shrink-0">
+                <span className="hidden sm:inline">Per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -328,139 +365,220 @@ export const SeoStudioView: React.FC = () => {
                 <i className="fa-solid fa-spinner animate-spin text-2xl text-brand-500"></i>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Loading collection records...</p>
               </div>
-            ) : filteredRecords.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-200/60 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/40 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      <th className="py-3.5 px-4">Record Title & Slug</th>
-                      <th className="py-3.5 px-4">Meta Title</th>
-                      <th className="py-3.5 px-4">Meta Description</th>
-                      <th className="py-3.5 px-4">Social Image</th>
-                      <th className="py-3.5 px-4">Indexing</th>
-                      <th className="py-3.5 px-4 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200/40 dark:divide-slate-800/40 text-xs">
-                    {filteredRecords.map((record) => {
-                      const data = record.data || {};
-                      const seo = getRecordSeo(record);
+            ) : paginatedRecords.length > 0 ? (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200/60 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/40 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        <th className="py-3.5 px-4">Record Title & Slug</th>
+                        <th className="py-3.5 px-4">Meta Title</th>
+                        <th className="py-3.5 px-4">Meta Description</th>
+                        <th className="py-3.5 px-4">Social Image</th>
+                        <th className="py-3.5 px-4">Indexing</th>
+                        <th className="py-3.5 px-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200/40 dark:divide-slate-800/40 text-xs">
+                      {paginatedRecords.map((record) => {
+                        const data = record.data || {};
+                        const seo = getRecordSeo(record);
 
-                      const title = data.title || data.name || "Untitled Record";
-                      const slug = data.slug || "no-slug";
+                        const title = data.title || data.name || "Untitled Record";
+                        const slug = data.slug || "no-slug";
 
-                      const metaTitle = seo.title?.trim();
-                      const metaDesc = seo.description?.trim();
-                      const ogImage = seo.og_image?.trim();
+                        const metaTitle = seo.title?.trim();
+                        const metaDesc = seo.description?.trim();
+                        const ogImage = seo.og_image?.trim();
 
-                      return (
-                        <tr
-                          key={record.id}
-                          className="hover:bg-slate-100/40 dark:hover:bg-slate-800/30 transition group"
-                        >
-                          {/* Record Title & Slug */}
-                          <td className="py-3.5 px-4">
-                            <div className="font-semibold text-slate-900 dark:text-white truncate max-w-[200px]">
-                              {title}
-                            </div>
-                            <div className="text-[10px] text-slate-400 font-mono truncate max-w-[200px] mt-0.5">
-                              /{selectedCollection.slug}/{slug}
-                            </div>
-                          </td>
+                        return (
+                          <tr
+                            key={record.id}
+                            className="hover:bg-slate-100/40 dark:hover:bg-slate-800/30 transition group"
+                          >
+                            {/* Record Title & Slug */}
+                            <td className="py-3.5 px-4">
+                              <div className="font-semibold text-slate-900 dark:text-white truncate max-w-[200px]">
+                                {title}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono truncate max-w-[200px] mt-0.5">
+                                /{selectedCollection.slug}/{slug}
+                              </div>
+                            </td>
 
-                          {/* Meta Title */}
-                          <td className="py-3.5 px-4">
-                            {metaTitle ? (
-                              <div className="space-y-0.5">
-                                <div className="text-slate-800 dark:text-slate-200 font-medium truncate max-w-[180px]">
-                                  {metaTitle}
+                            {/* Meta Title */}
+                            <td className="py-3.5 px-4">
+                              {metaTitle ? (
+                                <div className="space-y-0.5">
+                                  <div className="text-slate-800 dark:text-slate-200 font-medium truncate max-w-[180px]">
+                                    {metaTitle}
+                                  </div>
+                                  <span
+                                    className={`text-[9px] font-bold ${
+                                      metaTitle.length <= 60 ? "text-emerald-500" : "text-amber-500"
+                                    }`}
+                                  >
+                                    {metaTitle.length} chars
+                                  </span>
                                 </div>
-                                <span
-                                  className={`text-[9px] font-bold ${
-                                    metaTitle.length <= 60 ? "text-emerald-500" : "text-amber-500"
-                                  }`}
-                                >
-                                  {metaTitle.length} chars
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                                  <i className="fa-solid fa-arrows-rotate text-[9px]"></i> Uses Fallback
                                 </span>
-                              </div>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                                <i className="fa-solid fa-arrows-rotate text-[9px]"></i> Uses Fallback
-                              </span>
-                            )}
-                          </td>
+                              )}
+                            </td>
 
-                          {/* Meta Description */}
-                          <td className="py-3.5 px-4">
-                            {metaDesc ? (
-                              <div className="space-y-0.5 max-w-[220px]">
-                                <div className="text-slate-600 dark:text-slate-400 truncate">
-                                  {metaDesc}
+                            {/* Meta Description */}
+                            <td className="py-3.5 px-4">
+                              {metaDesc ? (
+                                <div className="space-y-0.5 max-w-[220px]">
+                                  <div className="text-slate-600 dark:text-slate-400 truncate">
+                                    {metaDesc}
+                                  </div>
+                                  <span
+                                    className={`text-[9px] font-bold ${
+                                      metaDesc.length <= 160 ? "text-emerald-500" : "text-amber-500"
+                                    }`}
+                                  >
+                                    {metaDesc.length} / 160 chars
+                                  </span>
                                 </div>
-                                <span
-                                  className={`text-[9px] font-bold ${
-                                    metaDesc.length <= 160 ? "text-emerald-500" : "text-amber-500"
-                                  }`}
-                                >
-                                  {metaDesc.length} / 160 chars
+                              ) : (
+                                <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                                  Not Specified
                                 </span>
-                              </div>
-                            ) : (
-                              <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
-                                Not Specified
-                              </span>
-                            )}
-                          </td>
+                              )}
+                            </td>
 
-                          {/* Social Image */}
-                          <td className="py-3.5 px-4">
-                            {ogImage ? (
-                              <div className="w-10 h-7 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={resolveMediaUrl(ogImage)}
-                                  alt="OG Preview"
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-slate-400">No Image</span>
-                            )}
-                          </td>
+                            {/* Social Image */}
+                            <td className="py-3.5 px-4">
+                              {ogImage ? (
+                                <div className="w-10 h-7 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={resolveMediaUrl(ogImage)}
+                                    alt="OG Preview"
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-400">No Image</span>
+                              )}
+                            </td>
 
-                          {/* Indexing */}
-                          <td className="py-3.5 px-4">
-                            {seo.no_index ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
-                                <i className="fa-solid fa-eye-slash text-[9px]"></i> No-Index
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                                <i className="fa-solid fa-check text-[9px]"></i> Indexed
-                              </span>
-                            )}
-                          </td>
+                            {/* Indexing */}
+                            <td className="py-3.5 px-4">
+                              {seo.no_index ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+                                  <i className="fa-solid fa-eye-slash text-[9px]"></i> No-Index
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                  <i className="fa-solid fa-check text-[9px]"></i> Indexed
+                                </span>
+                              )}
+                            </td>
 
-                          {/* Actions */}
-                          <td className="py-3.5 px-4 text-right">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingRecord(record);
-                                setIsEditModalOpen(true);
-                              }}
-                              className="px-3 py-1.5 rounded-xl bg-brand-500/15 hover:bg-brand-500 text-brand-500 hover:text-white text-xs font-semibold transition border border-brand-500/30 flex items-center gap-1.5 ml-auto"
-                            >
-                              <i className="fa-solid fa-pen-to-square text-[11px]"></i>
-                              <span>Edit SEO</span>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            {/* Actions */}
+                            <td className="py-3.5 px-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingRecord(record);
+                                  setIsEditSeoModalOpen(true);
+                                }}
+                                className="px-3.5 py-1.5 rounded-xl bg-brand-500/15 hover:bg-brand-500 text-brand-500 hover:text-white text-xs font-semibold transition border border-brand-500/30 flex items-center gap-1.5 ml-auto group/btn"
+                              >
+                                <i className="fa-solid fa-pen-to-square text-[11px] group-hover/btn:scale-110 transition-transform"></i>
+                                <span>Edit SEO</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Table Pagination Bar */}
+                <div className="px-4 py-3.5 border-t border-slate-200/60 dark:border-slate-800/60 bg-slate-50/40 dark:bg-slate-900/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+                  <div>
+                    Showing <span className="font-bold text-slate-800 dark:text-slate-200">{startIndexDisplay}</span> to{" "}
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{endIndexDisplay}</span> of{" "}
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{filteredRecords.length}</span> records
+                  </div>
+
+                  {/* Pagination Controls */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none text-slate-600 dark:text-slate-400 transition"
+                      title="First Page"
+                    >
+                      <i className="fa-solid fa-angles-left text-xs"></i>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none text-slate-600 dark:text-slate-400 font-medium transition flex items-center gap-1"
+                    >
+                      <i className="fa-solid fa-chevron-left text-[10px]"></i>
+                      <span>Prev</span>
+                    </button>
+
+                    {/* Page Numbers */}
+                    <div className="flex items-center gap-1 px-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                        .map((p, idx, arr) => {
+                          const prev = arr[idx - 1];
+                          const showEllipsis = prev && p - prev > 1;
+
+                          return (
+                            <React.Fragment key={p}>
+                              {showEllipsis && <span className="px-1 text-slate-400">...</span>}
+                              <button
+                                type="button"
+                                onClick={() => setCurrentPage(p)}
+                                className={`w-8 h-8 rounded-lg font-bold text-xs transition ${
+                                  currentPage === p
+                                    ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
+                                    : "hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            </React.Fragment>
+                          );
+                        })}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none text-slate-600 dark:text-slate-400 font-medium transition flex items-center gap-1"
+                    >
+                      <span>Next</span>
+                      <i className="fa-solid fa-chevron-right text-[10px]"></i>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                      className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none text-slate-600 dark:text-slate-400 transition"
+                      title="Last Page"
+                    >
+                      <i className="fa-solid fa-angles-right text-xs"></i>
+                    </button>
+                  </div>
+                </div>
+              </>
             ) : (
               <div className="p-12 text-center space-y-2">
                 <i className="fa-solid fa-magnifying-glass text-3xl text-slate-400"></i>
@@ -483,21 +601,20 @@ export const SeoStudioView: React.FC = () => {
         selectedCollectionSlug={selectedCollection?.slug || "collection"}
       />
 
-      {/* Edit Record SEO Modal */}
+      {/* Focused SEO-Only Edit Modal */}
       {selectedCollection && editingRecord && (
-        <EditRecordModal
-          isOpen={isEditModalOpen}
+        <EditSeoModal
+          isOpen={isEditSeoModalOpen}
           onClose={() => {
-            setIsEditModalOpen(false);
+            setIsEditSeoModalOpen(false);
             setEditingRecord(null);
           }}
           schema={selectedCollection}
           record={editingRecord}
           onSuccess={() => {
-            setIsEditModalOpen(false);
+            setIsEditSeoModalOpen(false);
             setEditingRecord(null);
             if (selectedCollectionId) loadRecords(selectedCollectionId);
-            if (toast) toast.showToast("Record SEO metadata updated successfully!", "success");
           }}
         />
       )}

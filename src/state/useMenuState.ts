@@ -281,29 +281,158 @@ export function useMenuState(projectId?: string) {
     });
   }, []);
 
-  // Add items to active menu
-  const addItemsToActiveMenu = useCallback((payloads: CreateMenuItemPayload[]) => {
-    setActiveMenu((prev) => {
-      if (!prev) return null;
-      setIsDirty(true);
+  // Helper to find all descendant IDs of an item (to prevent circular parent references)
+  const getDescendantIds = (items: MenuItem[], rootId: string): Set<string> => {
+    const descendants = new Set<string>();
+    const queue = [rootId];
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      items.forEach((it) => {
+        if (it.parentId === currentId && !descendants.has(it.id)) {
+          descendants.add(it.id);
+          queue.push(it.id);
+        }
+      });
+    }
+    return descendants;
+  };
 
-      const newItems: MenuItem[] = payloads.map((p, index) => ({
-        id: `item-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 6)}`,
-        label: p.label,
-        url: p.url,
-        type: p.type,
-        originalTitle: p.originalTitle || p.label,
-        level: 0,
-        targetBlank: false,
-        icon: p.icon,
-      }));
+  // Add items to active menu (optionally directly under a target parent)
+  const addItemsToActiveMenu = useCallback(
+    (payloads: CreateMenuItemPayload[], targetParentId?: string | null) => {
+      setActiveMenu((prev) => {
+        if (!prev) return null;
+        setIsDirty(true);
 
-      return {
-        ...prev,
-        items: [...prev.items, ...newItems],
-      };
-    });
-  }, []);
+        const parent = targetParentId
+          ? prev.items.find((i) => i.id === targetParentId)
+          : null;
+        const targetLevel = parent ? Math.min(2, parent.level + 1) : 0;
+        const parentId = parent ? parent.id : null;
+
+        const newItems: MenuItem[] = payloads.map((p, index) => ({
+          id: `item-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 6)}`,
+          label: p.label,
+          url: p.url,
+          type: p.type,
+          originalTitle: p.originalTitle || p.label,
+          level: targetLevel,
+          parentId: parentId,
+          targetBlank: false,
+          icon: p.icon,
+        }));
+
+        if (!parent) {
+          return {
+            ...prev,
+            items: [...prev.items, ...newItems],
+          };
+        }
+
+        // Insert new items right after the parent's last existing descendant
+        const parentDescendants = getDescendantIds(prev.items, parent.id);
+        let insertIndex = prev.items.findIndex((i) => i.id === parent.id);
+        for (let i = insertIndex + 1; i < prev.items.length; i++) {
+          if (parentDescendants.has(prev.items[i].id)) {
+            insertIndex = i;
+          } else {
+            break;
+          }
+        }
+
+        const copy = [...prev.items];
+        copy.splice(insertIndex + 1, 0, ...newItems);
+        return {
+          ...prev,
+          items: copy,
+        };
+      });
+    },
+    []
+  );
+
+  // Add a single sub-item directly to a parent item
+  const addSubItem = useCallback(
+    (parentId: string, payload: CreateMenuItemPayload) => {
+      addItemsToActiveMenu([payload], parentId);
+    },
+    [addItemsToActiveMenu]
+  );
+
+  // Set or change an item's parent directly (with cycle prevention and proper repositioning)
+  const setMenuItemParent = useCallback(
+    (itemId: string, newParentId: string | null) => {
+      setActiveMenu((prev) => {
+        if (!prev) return null;
+        const item = prev.items.find((i) => i.id === itemId);
+        if (!item) return prev;
+
+        // If no change, return
+        if ((item.parentId || null) === (newParentId || null)) return prev;
+
+        // Prevent setting parent to self or any of its own descendants
+        if (newParentId) {
+          if (newParentId === itemId) return prev;
+          const descendants = getDescendantIds(prev.items, itemId);
+          if (descendants.has(newParentId)) return prev;
+        }
+
+        setIsDirty(true);
+
+        // Find new parent
+        const parent = newParentId
+          ? prev.items.find((i) => i.id === newParentId)
+          : null;
+        const newLevel = parent ? Math.min(2, parent.level + 1) : 0;
+        const levelDelta = newLevel - item.level;
+
+        // Identify item and all its descendants to move together as a block
+        const myDescendants = getDescendantIds(prev.items, itemId);
+        const movingIds = new Set([itemId, ...Array.from(myDescendants)]);
+
+        const movingItems = prev.items
+          .filter((i) => movingIds.has(i.id))
+          .map((i) => {
+            if (i.id === itemId) {
+              return { ...i, parentId: parent ? parent.id : null, level: newLevel };
+            }
+            return {
+              ...i,
+              level: Math.min(2, Math.max(1, i.level + levelDelta)),
+            };
+          });
+
+        const remainingItems = prev.items.filter((i) => !movingIds.has(i.id));
+
+        if (!parent) {
+          // Moved to top level: place after the item's previous root position or at end
+          return {
+            ...prev,
+            items: [...remainingItems, ...movingItems],
+          };
+        }
+
+        // Insert directly after the parent's last existing descendant in remainingItems
+        const parentDescendantsInRemaining = getDescendantIds(remainingItems, parent.id);
+        let insertIndex = remainingItems.findIndex((i) => i.id === parent.id);
+        for (let i = insertIndex + 1; i < remainingItems.length; i++) {
+          if (parentDescendantsInRemaining.has(remainingItems[i].id)) {
+            insertIndex = i;
+          } else {
+            break;
+          }
+        }
+
+        const copy = [...remainingItems];
+        copy.splice(insertIndex + 1, 0, ...movingItems);
+        return {
+          ...prev,
+          items: copy,
+        };
+      });
+    },
+    []
+  );
 
   // Update a single menu item
   const updateMenuItem = useCallback((itemId: string, updates: Partial<MenuItem>) => {
@@ -322,13 +451,29 @@ export function useMenuState(projectId?: string) {
     });
   }, []);
 
-  // Remove a single menu item
+  // Remove a single menu item (reparenting its children gracefully so no dangling references exist)
   const removeMenuItem = useCallback((itemId: string) => {
     setActiveMenu((prev) => {
       if (!prev) return null;
       setIsDirty(true);
 
-      const updatedItems = prev.items.filter((item) => item.id !== itemId);
+      const itemToRemove = prev.items.find((i) => i.id === itemId);
+      const newParentForChildren = itemToRemove?.parentId || null;
+      const newLevelForChildren = itemToRemove ? itemToRemove.level : 0;
+
+      const updatedItems = prev.items
+        .filter((item) => item.id !== itemId)
+        .map((item) => {
+          if (item.parentId === itemId) {
+            return {
+              ...item,
+              parentId: newParentForChildren,
+              level: newLevelForChildren,
+            };
+          }
+          return item;
+        });
+
       return {
         ...prev,
         items: updatedItems,
@@ -358,7 +503,7 @@ export function useMenuState(projectId?: string) {
     });
   }, []);
 
-  // Indent item (increase level up to 2)
+  // Indent item (make sub-item, correctly preserving parentId and siblings)
   const indentMenuItem = useCallback((itemId: string) => {
     setActiveMenu((prev) => {
       if (!prev) return null;
@@ -368,15 +513,46 @@ export function useMenuState(projectId?: string) {
       const prevItem = prev.items[index - 1];
       const currentItem = prev.items[index];
 
-      // Cannot indent more than 1 level deeper than previous item, max level 2
-      const maxAllowedLevel = Math.min(2, prevItem.level + 1);
-      if (currentItem.level >= maxAllowedLevel) return prev;
+      // Cannot indent past level 2
+      if (currentItem.level >= 2) return prev;
+
+      let newParentId: string | null = null;
+      let newLevel = 1;
+
+      if (currentItem.level === 0) {
+        if (prevItem.level === 0) {
+          // Immediately after a root item -> becomes child of prevItem
+          newParentId = prevItem.id;
+          newLevel = 1;
+        } else if (prevItem.level === 1) {
+          // Immediately after a sub-item -> becomes a sibling under the SAME parent!
+          newParentId = prevItem.parentId || null;
+          newLevel = 1;
+        } else {
+          // Immediately after a sub-sub-item (level 2) -> find root of prevItem
+          const prevParent = prev.items.find((i) => i.id === prevItem.parentId);
+          newParentId = prevParent ? (prevParent.parentId || prevParent.id) : (prevItem.parentId || null);
+          newLevel = 1;
+        }
+      } else if (currentItem.level === 1) {
+        // Indenting from level 1 to level 2
+        // Can only become level 2 if preceded by an item at level 1 or 2
+        if (prevItem.level === 1) {
+          newParentId = prevItem.id;
+          newLevel = 2;
+        } else if (prevItem.level === 2) {
+          newParentId = prevItem.parentId || null;
+          newLevel = 2;
+        } else {
+          return prev;
+        }
+      }
 
       const updatedItems = [...prev.items];
       updatedItems[index] = {
         ...currentItem,
-        level: currentItem.level + 1,
-        parentId: prevItem.id,
+        level: newLevel,
+        parentId: newParentId,
       };
 
       setIsDirty(true);
@@ -387,7 +563,7 @@ export function useMenuState(projectId?: string) {
     });
   }, []);
 
-  // Outdent item (decrease level down to 0)
+  // Outdent item (decrease level down to 0, reparenting cleanly)
   const outdentMenuItem = useCallback((itemId: string) => {
     setActiveMenu((prev) => {
       if (!prev) return null;
@@ -397,12 +573,25 @@ export function useMenuState(projectId?: string) {
       const currentItem = prev.items[index];
       if (currentItem.level <= 0) return prev;
 
+      let newLevel = 0;
+      let newParentId: string | null = null;
+
+      if (currentItem.level === 2) {
+        // Outdent from sub-sub-item (level 2) to sub-item (level 1)
+        newLevel = 1;
+        const currentParent = prev.items.find((i) => i.id === currentItem.parentId);
+        newParentId = currentParent ? (currentParent.parentId || null) : null;
+      } else if (currentItem.level === 1) {
+        // Outdent from sub-item (level 1) to top-level (level 0)
+        newLevel = 0;
+        newParentId = null;
+      }
+
       const updatedItems = [...prev.items];
-      const newLevel = currentItem.level - 1;
       updatedItems[index] = {
         ...currentItem,
         level: newLevel,
-        parentId: newLevel === 0 ? null : currentItem.parentId,
+        parentId: newParentId,
       };
 
       setIsDirty(true);
@@ -605,6 +794,8 @@ export function useMenuState(projectId?: string) {
     updateActiveMenuLocations,
     updateActiveMenuAutoAddPages,
     addItemsToActiveMenu,
+    addSubItem,
+    setMenuItemParent,
     updateMenuItem,
     removeMenuItem,
     moveMenuItem,

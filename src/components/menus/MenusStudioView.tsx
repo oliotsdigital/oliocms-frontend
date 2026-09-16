@@ -61,6 +61,8 @@ export const MenusStudioView: React.FC = () => {
     updateActiveMenuLocations,
     updateActiveMenuAutoAddPages,
     addItemsToActiveMenu,
+    addSubItem,
+    setMenuItemParent,
     updateMenuItem,
     removeMenuItem,
     moveMenuItem,
@@ -143,7 +145,7 @@ export const MenusStudioView: React.FC = () => {
         };
       });
 
-    addItemsToActiveMenu(itemsToAdd);
+    addItemsToActiveMenu(itemsToAdd, targetParentIdForAdd || null);
     setSelectedRecordsMap((prev) => ({ ...prev, [col.id]: [] }));
     toast.showToast(`Added ${itemsToAdd.length} record(s) from "${col.name}" to menu`, "success");
   };
@@ -155,6 +157,15 @@ export const MenusStudioView: React.FC = () => {
   const [customLinkUrl, setCustomLinkUrl] = useState("https://");
   const [customLinkText, setCustomLinkText] = useState("");
 
+  // Target parent for bulk add from left sidebar
+  const [targetParentIdForAdd, setTargetParentIdForAdd] = useState<string>("");
+
+  // Quick Add Sub-Item Modal State
+  const [subItemModalParent, setSubItemModalParent] = useState<MenuItem | null>(null);
+  const [subItemLabel, setSubItemLabel] = useState("");
+  const [subItemUrl, setSubItemUrl] = useState("/");
+  const [subItemType, setSubItemType] = useState<MenuItemType>("custom");
+
   // Right Side: Expanded items for settings
   const [expandedItemIds, setExpandedItemIds] = useState<Record<string, boolean>>({});
 
@@ -164,6 +175,22 @@ export const MenusStudioView: React.FC = () => {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Helper to find all descendants of an item to exclude from parent dropdown
+  const getDescendantIdSet = (items: MenuItem[], rootId: string): Set<string> => {
+    const descendants = new Set<string>();
+    const queue = [rootId];
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      items.forEach((it) => {
+        if (it.parentId === currentId && !descendants.has(it.id)) {
+          descendants.add(it.id);
+          queue.push(it.id);
+        }
+      });
+    }
+    return descendants;
+  };
 
   // Handle adding checked collections
   const handleAddCollections = () => {
@@ -179,7 +206,7 @@ export const MenusStudioView: React.FC = () => {
         icon: c.icon,
       }));
 
-    addItemsToActiveMenu(itemsToAdd);
+    addItemsToActiveMenu(itemsToAdd, targetParentIdForAdd || null);
     setSelectedCollections([]);
     toast.showToast(`Added ${itemsToAdd.length} collection(s) to menu`, "success");
   };
@@ -192,17 +219,40 @@ export const MenusStudioView: React.FC = () => {
       return;
     }
 
-    addItemsToActiveMenu([
-      {
-        label: customLinkText.trim(),
-        url: customLinkUrl.trim(),
-        type: "custom",
-      },
-    ]);
+    addItemsToActiveMenu(
+      [
+        {
+          label: customLinkText.trim(),
+          url: customLinkUrl.trim(),
+          type: "custom",
+        },
+      ],
+      targetParentIdForAdd || null
+    );
 
     setCustomLinkText("");
     setCustomLinkUrl("https://");
     toast.showToast("Custom link added to menu", "success");
+  };
+
+  // Handle adding a sub-item from modal
+  const handleAddSubItemSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subItemModalParent || !subItemLabel.trim() || !subItemUrl.trim()) {
+      toast.showToast("Please provide both label and URL", "error");
+      return;
+    }
+
+    addSubItem(subItemModalParent.id, {
+      label: subItemLabel.trim(),
+      url: subItemUrl.trim(),
+      type: subItemType,
+    });
+
+    toast.showToast(`Added sub-item under "${subItemModalParent.label}"`, "success");
+    setSubItemModalParent(null);
+    setSubItemLabel("");
+    setSubItemUrl("/");
   };
 
   // Toggle item expansion
@@ -233,33 +283,56 @@ export const MenusStudioView: React.FC = () => {
     }
   };
 
-  // Build tree for JSON preview
+  // Build tree for JSON preview matching backend build_menu_tree
   const menuTreeJson = useMemo(() => {
     if (!activeMenu) return null;
 
-    // Convert flat level items into hierarchical tree
     interface TreeItem extends MenuItem {
       children?: TreeItem[];
     }
 
-    const tree: TreeItem[] = [];
-    const stack: { item: TreeItem; level: number }[] = [];
-
-    activeMenu.items.forEach((it) => {
+    const itemMap = new Map<string, TreeItem>();
+    const converted: TreeItem[] = activeMenu.items.map((it) => {
       const node: TreeItem = { ...it, children: [] };
-      while (stack.length > 0 && stack[stack.length - 1].level >= it.level) {
-        stack.pop();
-      }
-
-      if (stack.length === 0) {
-        tree.push(node);
-      } else {
-        const parent = stack[stack.length - 1].item;
-        parent.children = parent.children || [];
-        parent.children.push(node);
-      }
-      stack.push({ item: node, level: it.level });
+      if (node.id) itemMap.set(String(node.id), node);
+      return node;
     });
+
+    const hasParentIds = converted.some((it) => Boolean(it.parentId));
+    let finalTree: TreeItem[] = [];
+
+    if (hasParentIds) {
+      const roots: TreeItem[] = [];
+      converted.forEach((node) => {
+        const parentId = node.parentId ? String(node.parentId) : null;
+        if (parentId && itemMap.has(parentId)) {
+          const parent = itemMap.get(parentId)!;
+          parent.children = parent.children || [];
+          parent.children.push(node);
+        } else {
+          roots.push(node);
+        }
+      });
+      finalTree = roots;
+    } else {
+      // Fallback level-stack
+      const roots: TreeItem[] = [];
+      const stack: { item: TreeItem; level: number }[] = [];
+      converted.forEach((node) => {
+        while (stack.length > 0 && stack[stack.length - 1].level >= node.level) {
+          stack.pop();
+        }
+        if (stack.length === 0) {
+          roots.push(node);
+        } else {
+          const parent = stack[stack.length - 1].item;
+          parent.children = parent.children || [];
+          parent.children.push(node);
+        }
+        stack.push({ item: node, level: node.level });
+      });
+      finalTree = roots;
+    }
 
     return {
       id: activeMenu.id,
@@ -268,7 +341,7 @@ export const MenusStudioView: React.FC = () => {
       locations: activeMenu.locations,
       autoAddPages: activeMenu.autoAddPages,
       updatedAt: activeMenu.updatedAt,
-      items: tree,
+      items: finalTree,
     };
   }, [activeMenu]);
 
@@ -360,6 +433,46 @@ export const MenusStudioView: React.FC = () => {
                 Add menu items
               </h3>
             </div>
+
+            {/* Target Parent Selector Card */}
+            {activeMenu.items.length > 0 && (
+              <div className="glass-card rounded-2xl p-3.5 border border-slate-200/80 dark:border-slate-800 space-y-2 shadow-sm bg-white/70 dark:bg-slate-900/60">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <i className="fa-solid fa-turn-up rotate-90 text-brand-500 text-[10px]"></i>
+                    Add items under:
+                  </span>
+                  {targetParentIdForAdd && (
+                    <button
+                      type="button"
+                      onClick={() => setTargetParentIdForAdd("")}
+                      className="text-[10px] text-brand-500 hover:underline font-semibold"
+                    >
+                      Reset to Top-Level
+                    </button>
+                  )}
+                </div>
+                <select
+                  value={targetParentIdForAdd}
+                  onChange={(e) => setTargetParentIdForAdd(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium"
+                >
+                  <option value="">📁 Top-Level (Default)</option>
+                  {activeMenu.items
+                    .filter((it) => it.level < 2)
+                    .map((it) => (
+                      <option key={it.id} value={it.id}>
+                        {it.level === 0 ? "📁 " : "  ↳ "} {it.label} {it.level > 0 ? `(Level ${it.level})` : ""}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[10px] text-slate-400 leading-tight">
+                  {targetParentIdForAdd
+                    ? "New items added from below will become sub-items under this item."
+                    : "New items will be added as top-level navigation items."}
+                </p>
+              </div>
+            )}
 
             {/* Accordion 1: Dynamic CMS Collections */}
             <div className="glass-card rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm">
@@ -819,9 +932,17 @@ export const MenusStudioView: React.FC = () => {
                     const isSubSubItem = item.level === 2;
                     const isFirst = index === 0;
                     const isLast = index === activeMenu.items.length - 1;
-                    const prevItem = index > 0 ? activeMenu.items[index - 1] : null;
-                    const canIndent = prevItem ? item.level < Math.min(2, prevItem.level + 1) : false;
+                    const canIndent = index > 0 && item.level < 2;
                     const canOutdent = item.level > 0;
+                    const parentItem = item.parentId
+                      ? activeMenu.items.find((i) => i.id === item.parentId)
+                      : null;
+                    const candidateParents = activeMenu.items.filter(
+                      (p) =>
+                        p.id !== item.id &&
+                        !getDescendantIdSet(activeMenu.items, item.id).has(p.id) &&
+                        p.level < 2
+                    );
 
                     // Compute badge style by type
                     const typeBadge = {
@@ -869,20 +990,45 @@ export const MenusStudioView: React.FC = () => {
                                 {item.label}
                               </span>
 
-                              {/* WordPress style sub item badge */}
-                              {isSubItem && (
-                                <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
-                                  sub item
+                              {/* Parent relationship badge */}
+                              {parentItem ? (
+                                <span className="px-2 py-0.5 rounded-md bg-brand-500/10 text-brand-600 dark:text-brand-400 text-[10px] font-bold tracking-wider shrink-0 flex items-center gap-1 border border-brand-500/20">
+                                  <i className="fa-solid fa-turn-up rotate-90 text-[8px]"></i>
+                                  <span>under &ldquo;{parentItem.label}&rdquo;</span>
                                 </span>
-                              )}
-                              {isSubSubItem && (
-                                <span className="px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
-                                  sub-sub item
-                                </span>
+                              ) : (
+                                <>
+                                  {isSubItem && (
+                                    <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
+                                      sub item
+                                    </span>
+                                  )}
+                                  {isSubSubItem && (
+                                    <span className="px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
+                                      sub-sub item
+                                    </span>
+                                  )}
+                                </>
                               )}
                             </div>
 
-                            <div className="flex items-center gap-3 shrink-0">
+                            <div className="flex items-center gap-2.5 shrink-0">
+                              {/* Quick + Sub-item action button */}
+                              {item.level < 2 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSubItemModalParent(item);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-slate-200/60 dark:bg-slate-700/60 hover:bg-brand-500/15 text-slate-600 dark:text-slate-300 hover:text-brand-500 text-[10px] font-bold transition flex items-center gap-1"
+                                  title={`Add sub-item directly under "${item.label}"`}
+                                >
+                                  <i className="fa-solid fa-plus text-[9px]"></i>
+                                  <span className="hidden sm:inline">Sub-item</span>
+                                </button>
+                              )}
+
                               <span
                                 className={`px-2 py-0.5 rounded-md text-[10px] font-semibold ${typeBadge.bg}`}
                               >
@@ -979,6 +1125,43 @@ export const MenusStudioView: React.FC = () => {
                                 >
                                   Open link in a new tab (<code>target=&quot;_blank&quot;</code>)
                                 </label>
+                              </div>
+
+                              {/* Parent Item Assignment */}
+                              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-sitemap text-brand-500 text-xs"></i>
+                                    Parent Menu Item
+                                  </label>
+                                  {item.level < 2 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSubItemModalParent(item)}
+                                      className="text-[10px] font-bold text-brand-500 hover:text-brand-600 flex items-center gap-1"
+                                    >
+                                      <i className="fa-solid fa-plus text-[9px]"></i>
+                                      Add sub-item under this
+                                    </button>
+                                  )}
+                                </div>
+
+                                <select
+                                  value={item.parentId || ""}
+                                  onChange={(e) => setMenuItemParent(item.id, e.target.value || null)}
+                                  className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium"
+                                >
+                                  <option value="">— None (Top-Level Menu Item) —</option>
+                                  {candidateParents.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.level === 0 ? "📁 " : "  ↳ "} {p.label} {p.level > 0 ? `(Level ${p.level})` : "(Top-Level)"}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                <p className="text-[10px] text-slate-400 leading-tight">
+                                  Assign this item under any parent item. Multiple subitems can easily share the same parent item.
+                                </p>
                               </div>
 
                               {/* Hierarchy Controls & Actions */}
@@ -1327,6 +1510,96 @@ export const MenusStudioView: React.FC = () => {
                 Delete Permanently
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Sub-Item Modal */}
+      {subItemModalParent && (
+        <div className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md glass-panel rounded-2xl p-6 shadow-2xl border border-slate-200/60 dark:border-slate-800/60 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200/50 dark:border-slate-800/50">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <i className="fa-solid fa-folder-plus text-brand-500"></i>
+                  Add Sub-Item
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Adding child under: <strong className="text-brand-500">&ldquo;{subItemModalParent.label}&rdquo;</strong> (Level {subItemModalParent.level + 1})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSubItemModalParent(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg"
+              >
+                <i className="fa-solid fa-xmark text-sm"></i>
+              </button>
+            </div>
+
+            <form onSubmit={handleAddSubItemSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Sub-Item Navigation Label <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={subItemLabel}
+                  onChange={(e) => setSubItemLabel(e.target.value)}
+                  placeholder="e.g. Web Development"
+                  className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  URL / Target Path <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={subItemUrl}
+                  onChange={(e) => setSubItemUrl(e.target.value)}
+                  placeholder="/services/web-development"
+                  className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-[11px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Link Type
+                </label>
+                <select
+                  value={subItemType}
+                  onChange={(e) => setSubItemType(e.target.value as MenuItemType)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  <option value="custom">Custom Link</option>
+                  <option value="page">Page</option>
+                  <option value="collection">Collection</option>
+                  <option value="category">Category</option>
+                </select>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200/50 dark:border-slate-800/50 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setSubItemModalParent(null)}
+                  className="px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-brand-500 hover:bg-brand-600 text-white shadow-md shadow-brand-500/25 transition flex items-center gap-1.5"
+                >
+                  <i className="fa-solid fa-plus text-xs"></i>
+                  Add Sub-Item
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

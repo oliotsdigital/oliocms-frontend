@@ -2,10 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { CollectionRecord, CollectionSchema } from "@/models/collection.model";
+import { CollectionRecord, CollectionSchema, SeoMetadata } from "@/models/collection.model";
 import { updateCollectionRecordApi } from "@/api/collection.api";
 import { MediaFieldInput } from "./MediaFieldInput";
 import { EnumerationFieldInput } from "./EnumerationFieldInput";
+import { SeoFormSection } from "./SeoFormSection";
 import { useOlio } from "@/state/OlioProvider";
 
 interface EditRecordModalProps {
@@ -26,12 +27,14 @@ export const EditRecordModal: React.FC<EditRecordModalProps> = ({
   const { toast } = useOlio();
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [seo, setSeo] = useState<SeoMetadata>({});
 
   const {
     register,
     handleSubmit,
     control,
     reset,
+    watch,
     formState: { errors },
   } = useForm<Record<string, any>>({
     defaultValues: record?.data || {},
@@ -50,6 +53,7 @@ export const EditRecordModal: React.FC<EditRecordModalProps> = ({
         }
       });
       reset(initialVals);
+      setSeo(record.data?.seo || {});
       setServerError(null);
     }
   }, [record, schema, reset]);
@@ -74,6 +78,8 @@ export const EditRecordModal: React.FC<EditRecordModalProps> = ({
         cleanedData[f.name] = val !== undefined ? val : null;
       }
     });
+
+    cleanedData.seo = seo;
 
     const res = await updateCollectionRecordApi(schema.id, record.id, cleanedData);
     setSubmitting(false);
@@ -257,6 +263,19 @@ export const EditRecordModal: React.FC<EditRecordModalProps> = ({
               </div>
             );
           })}
+
+          {/* SEO Accordion Section */}
+          <div className="pt-2">
+            <SeoFormSection
+              seo={seo}
+              onChange={setSeo}
+              fallbackTitle={watch("title") || record.data?.title || record.data?.name}
+              fallbackSlug={watch("slug") || record.data?.slug}
+              collectionSlug={schema.slug}
+              projectId={schema.project_id}
+              disabled={submitting}
+            />
+          </div>
 
           <div className="pt-4 border-t border-slate-200/40 dark:border-slate-800/40 flex items-center justify-end gap-3">
             <button

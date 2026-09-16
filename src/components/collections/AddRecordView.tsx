@@ -4,12 +4,13 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
-import { CollectionSchema } from "@/models/collection.model";
+import { CollectionSchema, SeoMetadata } from "@/models/collection.model";
 import { fetchCollectionSchemaApi, createCollectionRecordApi } from "@/api/collection.api";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useOlio } from "@/state/OlioProvider";
 import { MediaFieldInput } from "./MediaFieldInput";
 import { EnumerationFieldInput } from "./EnumerationFieldInput";
+import { SeoFormSection } from "./SeoFormSection";
 
 interface AddRecordViewProps {
   collectionId: string;
@@ -22,6 +23,7 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
   const [loadingSchema, setLoadingSchema] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [seo, setSeo] = useState<SeoMetadata>({});
 
   const {
     register,
@@ -84,6 +86,8 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
         cleanedData[f.name] = val !== undefined ? val : null;
       }
     });
+
+    cleanedData.seo = seo;
 
     const res = await createCollectionRecordApi(schema.id, cleanedData);
     setSubmitting(false);
@@ -304,8 +308,18 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
                 </div>
               </div>
 
-              {/* Right Column: Actions Sidebar Card */}
+              {/* Right Column: Actions Sidebar Card & SEO */}
               <div className="space-y-6">
+                {/* SEO Accordion Section */}
+                <SeoFormSection
+                  seo={seo}
+                  onChange={setSeo}
+                  fallbackTitle={titleValue}
+                  fallbackSlug={watch("slug")}
+                  collectionSlug={schema.slug}
+                  projectId={schema.project_id}
+                  disabled={submitting}
+                />
                 <div className="glass-panel rounded-3xl p-6 border border-slate-200/50 dark:border-slate-800/50 shadow-xl space-y-5">
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-200/40 dark:border-slate-800/40 pb-3">
                     Entry Actions

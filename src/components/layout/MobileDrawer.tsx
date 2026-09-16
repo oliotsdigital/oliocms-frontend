@@ -225,6 +225,17 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             >
               <i className="fa-solid fa-rectangle-list"></i> Forms
             </Link>
+            <Link
+              href="/seo"
+              onClick={onClose}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium ${
+                isNavActive("/seo")
+                  ? "bg-brand-500 text-white"
+                  : "text-slate-600 dark:text-slate-300"
+              }`}
+            >
+              <i className="fa-solid fa-magnifying-glass-chart"></i> SEO
+            </Link>
           </nav>
         </div>
 

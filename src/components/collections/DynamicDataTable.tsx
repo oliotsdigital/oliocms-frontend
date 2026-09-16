@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CollectionRecord, CollectionSchema, FieldDefinition } from "@/models/collection.model";
 import { deleteCollectionRecordApi } from "@/api/collection.api";
 import { resolveMediaUrl, DEFAULT_LAZY_IMAGE } from "@/utils/media";
@@ -23,14 +23,223 @@ interface DisplayColumn {
   isVirtualMedia?: boolean;
 }
 
-export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
+const FILTER_DEBOUNCE_MS = 350;
+
+interface RecordRowProps {
+  row: CollectionRecord;
+  visibleColumns: DisplayColumn[];
+  isSelected: boolean;
+  isBulkDeleting: boolean;
+  isDeleting: boolean;
+  onToggleSelect: (id: string) => void;
+  onEdit: (row: CollectionRecord) => void;
+  onView: (row: CollectionRecord) => void;
+  onDelete: (id: string) => void;
+}
+
+const RecordRow = React.memo(function RecordRow({
+  row,
+  visibleColumns,
+  isSelected,
+  isBulkDeleting,
+  isDeleting,
+  onToggleSelect,
+  onEdit,
+  onView,
+  onDelete,
+}: RecordRowProps) {
+  return (
+    <tr
+      className={`transition ${
+        isSelected
+          ? "bg-brand-500/10 dark:bg-brand-500/20 hover:bg-brand-500/15"
+          : "hover:bg-slate-100/50 dark:hover:bg-slate-800/40"
+      }`}
+    >
+      <td className="py-3 px-4 w-10 text-center">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelect(row.id)}
+          disabled={isBulkDeleting}
+          className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-brand-500 focus:ring-brand-500 cursor-pointer"
+        />
+      </td>
+      {visibleColumns.map((col) => {
+        const f = col.field || { name: col.key, label: col.label, type: "string" as const };
+        let val = row.data?.[f.name];
+
+        if (val === undefined || val === null || val === "") {
+          if (col.key.toLowerCase().includes("slug")) {
+            val = row.data?.slug;
+          } else if (col.key.toLowerCase().includes("title") || col.key.toLowerCase().includes("name")) {
+            val = row.data?.title || row.data?.name;
+          } else if (col.key.toLowerCase().includes("media") || f.type === "media" || col.key.toLowerCase().includes("image")) {
+            val = row.data?.media || row.data?.featured_image || row.data?.image || DEFAULT_LAZY_IMAGE;
+          }
+        }
+
+        const isMediaCol = f.type === "media" || col.key.toLowerCase().includes("media") || col.key.toLowerCase().includes("image");
+        if (isMediaCol && (val === undefined || val === null || val === "")) {
+          val = DEFAULT_LAZY_IMAGE;
+        }
+
+        if (val === undefined || val === null || val === "") {
+          return (
+            <td key={col.key} className="py-3 px-4 text-slate-400 italic">
+              —
+            </td>
+          );
+        }
+
+        if (isMediaCol) {
+          const strVal = String(val || DEFAULT_LAZY_IMAGE);
+          const mediaUrl = resolveMediaUrl(strVal);
+          const isImg =
+            strVal.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i) ||
+            strVal.startsWith("data:image/") ||
+            strVal.startsWith("/images/") ||
+            strVal.includes("images.unsplash.com");
+
+          return (
+            <td key={col.key} className="py-2 px-4">
+              {isImg ? (
+                <a
+                  href={mediaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative w-9 h-9 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-sm hover:border-brand-500/50 hover:shadow-md transition inline-flex"
+                  title={strVal}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={mediaUrl}
+                    alt={f.label || f.name}
+                    className="w-full h-full object-cover transition group-hover:scale-110"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = DEFAULT_LAZY_IMAGE;
+                    }}
+                  />
+                </a>
+              ) : (
+                <a
+                  href={mediaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-500/20 hover:border-brand-500/50 transition inline-flex"
+                  title={strVal}
+                >
+                  <i className="fa-solid fa-file text-sm"></i>
+                </a>
+              )}
+            </td>
+          );
+        }
+
+        if (col.key.toLowerCase().includes("slug") || f.name.toLowerCase().includes("slug")) {
+          return (
+            <td
+              key={col.key}
+              className="py-3 px-4 max-w-xs truncate"
+              title={String(val)}
+            >
+              <span className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                /{String(val).replace(/^\/+/, "")}
+              </span>
+            </td>
+          );
+        }
+
+        if (f.type === "boolean") {
+          const isTrue = val === true || String(val).toLowerCase() === "true" || val === 1 || val === "1";
+          return (
+            <td key={col.key} className="py-3 px-4">
+              <span
+                className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                  isTrue
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                }`}
+              >
+                {isTrue ? "True" : "False"}
+              </span>
+            </td>
+          );
+        }
+
+        if (f.type === "date") {
+          const dateVal = new Date(String(val));
+          return (
+            <td key={col.key} className="py-3 px-4 text-slate-600 dark:text-slate-300 text-[11px]">
+              {Number.isNaN(dateVal.getTime()) ? String(val) : dateVal.toLocaleDateString()}
+            </td>
+          );
+        }
+
+        if (f.type === "password") {
+          return (
+            <td key={col.key} className="py-3 px-4 text-slate-400 font-mono text-[11px]">
+              ••••••••
+            </td>
+          );
+        }
+
+        const displayVal =
+          typeof val === "object" ? JSON.stringify(val) : String(val);
+
+        return (
+          <td
+            key={col.key}
+            className="py-3 px-4 text-slate-900 dark:text-white font-semibold max-w-xs truncate"
+            title={displayVal}
+          >
+            {displayVal}
+          </td>
+        );
+      })}
+
+      <td className="py-3 px-4 text-slate-400 text-[11px]">
+        {new Date(row.created_at).toLocaleDateString()}
+      </td>
+
+      <td className="py-3 px-4 text-right">
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            onClick={() => onEdit(row)}
+            className="p-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-brand-500 hover:bg-brand-500/10 transition"
+            title="Edit Record"
+          >
+            <i className="fa-solid fa-pen-to-square text-xs"></i>
+          </button>
+          <button
+            onClick={() => onView(row)}
+            className="p-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-brand-500 transition"
+            title="View Raw JSON"
+          >
+            <i className="fa-solid fa-code text-xs"></i>
+          </button>
+          <button
+            onClick={() => onDelete(row.id)}
+            disabled={isDeleting}
+            className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition"
+            title="Delete Record"
+          >
+            <i className="fa-solid fa-trash-can text-xs"></i>
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+});
+
+export const DynamicDataTable: React.FC<DynamicDataTableProps> = React.memo(function DynamicDataTable({
   schema,
   records,
   search,
   onSearchChange,
   onRefresh,
   onFilterChange,
-}) => {
+}) {
   const { toast } = useOlio();
   const [selectedRecord, setSelectedRecord] = useState<CollectionRecord | null>(null);
   const [editingRecord, setEditingRecord] = useState<CollectionRecord | null>(null);
@@ -41,23 +250,41 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
   const [visibleOptionalKeys, setVisibleOptionalKeys] = useState<string[]>([]);
   const [isColumnsOpen, setIsColumnsOpen] = useState(false);
   const columnsMenuRef = useRef<HTMLDivElement>(null);
+  const filterTimerRef = useRef<number | null>(null);
+  const pendingFiltersRef = useRef<Record<string, string>>({});
 
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const isAllSelected = records.length > 0 && selectedIds.length === records.length;
   const isSomeSelected = selectedIds.length > 0 && selectedIds.length < records.length;
 
-  const handleSelectAll = () => {
-    if (isAllSelected) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(records.map((r) => r.id));
-    }
-  };
+  const handleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (records.length > 0 && prev.length === records.length) return [];
+      return records.map((r) => r.id);
+    });
+  }, [records]);
 
-  const handleToggleSelect = (id: string) => {
+  const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
-  };
+  }, []);
+
+  const handleEdit = useCallback((row: CollectionRecord) => {
+    setEditingRecord(row);
+  }, []);
+
+  const handleView = useCallback((row: CollectionRecord) => {
+    setSelectedRecord(row);
+  }, []);
+
+  const handleCloseEdit = useCallback(() => {
+    setEditingRecord(null);
+  }, []);
+
+  const handleCloseView = useCallback(() => {
+    setSelectedRecord(null);
+  }, []);
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
@@ -216,20 +443,50 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
     );
   };
 
-  const handleDelete = async (recordId: string) => {
+  const handleDelete = useCallback(async (recordId: string) => {
     if (!confirm("Are you sure you want to delete this record?")) return;
     setDeletingId(recordId);
     await deleteCollectionRecordApi(schema.id, recordId);
     setDeletingId(null);
     onRefresh();
-  };
+  }, [schema.id, onRefresh]);
 
-  const handleLocalFilterChange = (key: string, val: string) => {
-    const updated = { ...filterValues, [key]: val };
-    if (!val) delete updated[key];
-    setFilterValues(updated);
-    if (onFilterChange) onFilterChange(updated);
-  };
+  const emitFilters = useCallback((filters: Record<string, string>, immediate: boolean) => {
+    pendingFiltersRef.current = filters;
+    if (filterTimerRef.current) {
+      window.clearTimeout(filterTimerRef.current);
+      filterTimerRef.current = null;
+    }
+    if (!onFilterChange) return;
+    if (immediate) {
+      onFilterChange(filters);
+      return;
+    }
+    filterTimerRef.current = window.setTimeout(() => {
+      onFilterChange(pendingFiltersRef.current);
+      filterTimerRef.current = null;
+    }, FILTER_DEBOUNCE_MS);
+  }, [onFilterChange]);
+
+  const handleLocalFilterChange = useCallback((key: string, val: string, immediate: boolean) => {
+    setFilterValues((prev) => {
+      const updated = { ...prev, [key]: val };
+      if (!val) delete updated[key];
+      emitFilters(updated, immediate);
+      return updated;
+    });
+  }, [emitFilters]);
+
+  const handleClearFilters = useCallback(() => {
+    setFilterValues({});
+    emitFilters({}, true);
+  }, [emitFilters]);
+
+  useEffect(() => {
+    return () => {
+      if (filterTimerRef.current) window.clearTimeout(filterTimerRef.current);
+    };
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -245,7 +502,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
               <select
                 key={f.name}
                 value={filterValues[f.name] || ""}
-                onChange={(e) => handleLocalFilterChange(f.name, e.target.value)}
+                onChange={(e) => handleLocalFilterChange(f.name, e.target.value, true)}
                 className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white"
               >
                 <option value="">All ({f.label || f.name})</option>
@@ -260,7 +517,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                 type="number"
                 placeholder={`Min ${f.label || f.name}`}
                 value={filterValues[`${f.name}__gte`] || ""}
-                onChange={(e) => handleLocalFilterChange(`${f.name}__gte`, e.target.value)}
+                onChange={(e) => handleLocalFilterChange(`${f.name}__gte`, e.target.value, false)}
                 className="w-32 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white"
               />
             );
@@ -366,10 +623,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
 
           {Object.keys(filterValues).length > 0 && (
             <button
-              onClick={() => {
-                setFilterValues({});
-                if (onFilterChange) onFilterChange({});
-              }}
+              onClick={handleClearFilters}
               className="text-xs text-rose-500 hover:underline font-semibold"
             >
               Clear Filters
@@ -451,192 +705,18 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
             <tbody className="divide-y divide-slate-200/40 dark:divide-slate-800/40 text-xs font-medium">
               {records.length > 0 ? (
                 records.map((row) => (
-                  <tr
+                  <RecordRow
                     key={row.id}
-                    className={`transition ${
-                      selectedIds.includes(row.id)
-                        ? "bg-brand-500/10 dark:bg-brand-500/20 hover:bg-brand-500/15"
-                        : "hover:bg-slate-100/50 dark:hover:bg-slate-800/40"
-                    }`}
-                  >
-                    {/* Row Select Checkbox */}
-                    <td className="py-3 px-4 w-10 text-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(row.id)}
-                        onChange={() => handleToggleSelect(row.id)}
-                        disabled={isBulkDeleting}
-                        className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-brand-500 focus:ring-brand-500 cursor-pointer"
-                      />
-                    </td>
-                    {/* Default columns plus any extra fields the user enabled */}
-                    {visibleColumns.map((col) => {
-                      const f = col.field || { name: col.key, label: col.label, type: "string" as const };
-                      let val = row.data?.[f.name];
-
-                      // Fallback checks for standard field names
-                      if (val === undefined || val === null || val === "") {
-                        if (col.key.toLowerCase().includes("slug")) {
-                          val = row.data?.slug;
-                        } else if (col.key.toLowerCase().includes("title") || col.key.toLowerCase().includes("name")) {
-                          val = row.data?.title || row.data?.name;
-                        } else if (col.key.toLowerCase().includes("media") || f.type === "media" || col.key.toLowerCase().includes("image")) {
-                          val = row.data?.media || row.data?.featured_image || row.data?.image || DEFAULT_LAZY_IMAGE;
-                        }
-                      }
-
-                      const isMediaCol = f.type === "media" || col.key.toLowerCase().includes("media") || col.key.toLowerCase().includes("image");
-                      if (isMediaCol && (val === undefined || val === null || val === "")) {
-                        val = DEFAULT_LAZY_IMAGE;
-                      }
-
-                      if (val === undefined || val === null || val === "") {
-                        return (
-                          <td key={col.key} className="py-3 px-4 text-slate-400 italic">
-                            —
-                          </td>
-                        );
-                      }
-
-                      if (isMediaCol) {
-                        const strVal = String(val || DEFAULT_LAZY_IMAGE);
-                        const mediaUrl = resolveMediaUrl(strVal);
-                        const isImg =
-                          strVal.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i) ||
-                          strVal.startsWith("data:image/") ||
-                          strVal.startsWith("/images/") ||
-                          strVal.includes("images.unsplash.com");
-
-                        return (
-                          <td key={col.key} className="py-2 px-4">
-                            {isImg ? (
-                              <a
-                                href={mediaUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="group relative w-9 h-9 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-sm hover:border-brand-500/50 hover:shadow-md transition inline-flex"
-                                title={strVal}
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={mediaUrl}
-                                  alt={f.label || f.name}
-                                  className="w-full h-full object-cover transition group-hover:scale-110"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = DEFAULT_LAZY_IMAGE;
-                                  }}
-                                />
-                              </a>
-                            ) : (
-                              <a
-                                href={mediaUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-500/20 hover:border-brand-500/50 transition inline-flex"
-                                title={strVal}
-                              >
-                                <i className="fa-solid fa-file text-sm"></i>
-                              </a>
-                            )}
-                          </td>
-                        );
-                      }
-
-                      if (col.key.toLowerCase().includes("slug") || f.name.toLowerCase().includes("slug")) {
-                        return (
-                          <td
-                            key={col.key}
-                            className="py-3 px-4 max-w-xs truncate"
-                            title={String(val)}
-                          >
-                            <span className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                              /{String(val).replace(/^\/+/, "")}
-                            </span>
-                          </td>
-                        );
-                      }
-
-                      if (f.type === "boolean") {
-                        const isTrue = val === true || String(val).toLowerCase() === "true" || val === 1 || val === "1";
-                        return (
-                          <td key={col.key} className="py-3 px-4">
-                            <span
-                              className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
-                                isTrue
-                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                  : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-                              }`}
-                            >
-                              {isTrue ? "True" : "False"}
-                            </span>
-                          </td>
-                        );
-                      }
-
-                      if (f.type === "date") {
-                        const dateVal = new Date(String(val));
-                        return (
-                          <td key={col.key} className="py-3 px-4 text-slate-600 dark:text-slate-300 text-[11px]">
-                            {Number.isNaN(dateVal.getTime()) ? String(val) : dateVal.toLocaleDateString()}
-                          </td>
-                        );
-                      }
-
-                      if (f.type === "password") {
-                        return (
-                          <td key={col.key} className="py-3 px-4 text-slate-400 font-mono text-[11px]">
-                            ••••••••
-                          </td>
-                        );
-                      }
-
-                      const displayVal =
-                        typeof val === "object" ? JSON.stringify(val) : String(val);
-
-                      return (
-                        <td
-                          key={col.key}
-                          className="py-3 px-4 text-slate-900 dark:text-white font-semibold max-w-xs truncate"
-                          title={displayVal}
-                        >
-                          {displayVal}
-                        </td>
-                      );
-                    })}
-
-                    {/* Created At */}
-                    <td className="py-3 px-4 text-slate-400 text-[11px]">
-                      {new Date(row.created_at).toLocaleDateString()}
-                    </td>
-
-                    {/* Actions */}
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => setEditingRecord(row)}
-                          className="p-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-brand-500 hover:bg-brand-500/10 transition"
-                          title="Edit Record"
-                        >
-                          <i className="fa-solid fa-pen-to-square text-xs"></i>
-                        </button>
-                        <button
-                          onClick={() => setSelectedRecord(row)}
-                          className="p-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-brand-500 transition"
-                          title="View Raw JSON"
-                        >
-                          <i className="fa-solid fa-code text-xs"></i>
-                        </button>
-                        <button
-                          onClick={() => handleDelete(row.id)}
-                          disabled={deletingId === row.id}
-                          className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition"
-                          title="Delete Record"
-                        >
-                          <i className="fa-solid fa-trash-can text-xs"></i>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                    row={row}
+                    visibleColumns={visibleColumns}
+                    isSelected={selectedSet.has(row.id)}
+                    isBulkDeleting={isBulkDeleting}
+                    isDeleting={deletingId === row.id}
+                    onToggleSelect={handleToggleSelect}
+                    onEdit={handleEdit}
+                    onView={handleView}
+                    onDelete={handleDelete}
+                  />
                 ))
               ) : (
                 <tr>
@@ -658,14 +738,13 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
       {editingRecord && (
         <EditRecordModal
           isOpen={true}
-          onClose={() => setEditingRecord(null)}
+          onClose={handleCloseEdit}
           schema={schema}
           record={editingRecord}
           onSuccess={onRefresh}
         />
       )}
 
-      {/* JSON Inspector Modal Drawer */}
       {selectedRecord && (
         <div className="fixed inset-0 z-[130] bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4">
           <div className="w-full max-w-lg glass-panel rounded-2xl p-5 border border-slate-200/50 dark:border-slate-800/50 shadow-2xl">
@@ -674,7 +753,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
                 <i className="fa-solid fa-code text-brand-500"></i> Record JSON Document
               </h4>
               <button
-                onClick={() => setSelectedRecord(null)}
+                onClick={handleCloseView}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
               >
                 <i className="fa-solid fa-xmark"></i>
@@ -685,7 +764,7 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
             </div>
             <div className="mt-4 flex justify-end">
               <button
-                onClick={() => setSelectedRecord(null)}
+                onClick={handleCloseView}
                 className="px-4 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-brand-500 hover:text-white transition"
               >
                 Close
@@ -696,4 +775,4 @@ export const DynamicDataTable: React.FC<DynamicDataTableProps> = ({
       )}
     </div>
   );
-};
+});

@@ -8,6 +8,7 @@ interface MediaGridProps {
   isLoading?: boolean;
   onDeleteMedia: (id: number | string) => void;
   selectedProjectId?: string;
+  isFiltered?: boolean;
 }
 
 export const MediaGrid: React.FC<MediaGridProps> = ({
@@ -15,6 +16,7 @@ export const MediaGrid: React.FC<MediaGridProps> = ({
   isLoading,
   onDeleteMedia,
   selectedProjectId,
+  isFiltered = false,
 }) => {
   const [copiedId, setCopiedId] = useState<string | number | null>(null);
   const [previewItem, setPreviewItem] = useState<MediaItem | null>(null);
@@ -63,11 +65,15 @@ export const MediaGrid: React.FC<MediaGridProps> = ({
     return (
       <div className="glass-panel p-16 rounded-2xl text-center space-y-3">
         <div className="w-14 h-14 mx-auto rounded-2xl bg-orange-500/10 text-orange-500 flex items-center justify-center">
-          <i className="fa-solid fa-cloud-arrow-up text-2xl"></i>
+          <i className={`fa-solid ${isFiltered ? "fa-magnifying-glass" : "fa-cloud-arrow-up"} text-2xl`}></i>
         </div>
-        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">No Media Files in Cloudflare R2</h3>
+        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+          {isFiltered ? "No Matching Media Files" : "No Media Files in Cloudflare R2"}
+        </h3>
         <p className="text-xs text-slate-500 max-w-md mx-auto">
-          No files were found in the folder for this website. Click &quot;Upload Asset&quot; to upload your first image to Cloudflare R2.
+          {isFiltered
+            ? "No files match your search criteria. Try a different keyword or clear your search."
+            : "No files were found in the folder for this website. Click \"Upload Asset\" to upload your first image to Cloudflare R2."}
         </p>
       </div>
     );

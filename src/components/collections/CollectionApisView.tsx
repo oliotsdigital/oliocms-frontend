@@ -300,27 +300,58 @@ print(data)`;
         {loading ? (
           <div className="h-44 rounded-3xl glass-panel animate-pulse" />
         ) : schema ? (
-          <div className="glass-panel rounded-3xl p-6 border border-slate-200/50 dark:border-slate-800/50 shadow-xl relative overflow-hidden bg-gradient-to-br from-brand-500/5 via-transparent to-purple-500/5">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
-              <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-500 shrink-0">
-                    <i className={`fa-solid ${schema.icon || "fa-cube"} text-lg`}></i>
-                  </div>
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
-                      {schema.name} API Gateway
-                    </h2>
-                    <p className="text-xs font-mono text-slate-400">
-                      Slug: <span className="text-brand-500 font-bold">/{schema.slug}</span>
-                    </p>
-                  </div>
+          <>
+            {schema.is_public === false && (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 flex items-start gap-3 shadow-md">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <i className="fa-solid fa-lock text-sm"></i>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl">
-                  Automatically generated, high-performance read-only REST API endpoints for your user-defined collection.
-                  No JWT authentication required—ideal for external website storefronts, Next.js ISR, or mobile apps.
-                </p>
+                <div className="space-y-1">
+                  <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                    This Collection is Marked as Private
+                  </h4>
+                  <p className="text-xs text-amber-700/90 dark:text-amber-400/90 leading-relaxed">
+                    Public API access is restricted for this collection. Any requests made to public endpoints will return{" "}
+                    <code className="px-1.5 py-0.5 rounded bg-amber-500/20 font-mono text-[11px] font-bold">403 Forbidden</code>.
+                    To enable public REST APIs, change the collection access type to <strong>Public</strong> in Edit Collection Settings.
+                  </p>
+                </div>
               </div>
+            )}
+
+            <div className="glass-panel rounded-3xl p-6 border border-slate-200/50 dark:border-slate-800/50 shadow-xl relative overflow-hidden bg-gradient-to-br from-brand-500/5 via-transparent to-purple-500/5">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="w-10 h-10 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-500 shrink-0">
+                      <i className={`fa-solid ${schema.icon || "fa-cube"} text-lg`}></i>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
+                          {schema.name} API Gateway
+                        </h2>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 shrink-0 ${
+                            schema.is_public !== false
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                              : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                          }`}
+                        >
+                          <i className={`fa-solid ${schema.is_public !== false ? "fa-globe" : "fa-lock"} text-[8px]`}></i>
+                          {schema.is_public !== false ? "Public" : "Private"}
+                        </span>
+                      </div>
+                      <p className="text-xs font-mono text-slate-400">
+                        Slug: <span className="text-brand-500 font-bold">/{schema.slug}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl">
+                    Automatically generated, high-performance read-only REST API endpoints for your user-defined collection.
+                    No JWT authentication required—ideal for external website storefronts, Next.js ISR, or mobile apps.
+                  </p>
+                </div>
 
               {/* API Keys & Context Box */}
               <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-2.5 shrink-0 w-full lg:w-96 border border-slate-800 shadow-inner">
@@ -362,7 +393,8 @@ print(data)`;
               </div>
             </div>
           </div>
-        ) : (
+        </>
+      ) : (
           <div className="p-8 text-center glass-panel rounded-2xl">
             <p className="text-xs font-bold text-rose-500">Collection schema not found.</p>
           </div>

@@ -42,9 +42,19 @@ export interface CollectionSchema {
   api_id_singular?: string;
   api_id_plural?: string;
   schema_definition: FieldDefinition[];
+  is_public?: boolean;
   is_deleted?: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface SeoMetadata {
+  title?: string | null;
+  description?: string | null;
+  keywords?: string | null;
+  og_image?: string | null;
+  canonical_url?: string | null;
+  no_index?: boolean;
 }
 
 export interface CollectionRecord {
@@ -63,6 +73,7 @@ export interface CreateCollectionPayload {
   api_id_singular?: string;
   api_id_plural?: string;
   schema_definition: FieldDefinition[];
+  is_public?: boolean;
 }
 
 

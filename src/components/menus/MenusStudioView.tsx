@@ -46,6 +46,21 @@ function getRecordTitle(record: CollectionRecord, col?: CollectionSchema): strin
 }
 
 
+function getDescendantIdsForStudio(items: MenuItem[], targetId: string): Set<string> {
+  const descendants = new Set<string>();
+  const queue = [targetId];
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    for (const it of items) {
+      if (it.parentId === currentId && !descendants.has(it.id)) {
+        descendants.add(it.id);
+        queue.push(it.id);
+      }
+    }
+  }
+  return descendants;
+}
+
 export const MenusStudioView: React.FC = () => {
   const { projectState, collectionsState, toast } = useOlio();
   const selectedProjectId = projectState.selectedProject?.id;
@@ -124,6 +139,15 @@ export const MenusStudioView: React.FC = () => {
     }
   };
 
+  // Sidebar target parent for adding items
+  const [sidebarTargetParentId, setSidebarTargetParentId] = useState<string>("");
+
+  // Sub-item quick creation modal state
+  const [subItemModalParent, setSubItemModalParent] = useState<MenuItem | null>(null);
+  const [subItemLabel, setSubItemLabel] = useState("");
+  const [subItemUrl, setSubItemUrl] = useState("/");
+  const [subItemType, setSubItemType] = useState<MenuItemType>("custom");
+
   const handleAddCollectionRecords = (col: CollectionSchema) => {
     const selectedIds = selectedRecordsMap[col.id] || [];
     if (selectedIds.length === 0) return;
@@ -145,9 +169,13 @@ export const MenusStudioView: React.FC = () => {
         };
       });
 
-    addItemsToActiveMenu(itemsToAdd, targetParentIdForAdd || null);
+    addItemsToActiveMenu(itemsToAdd, sidebarTargetParentId || null);
     setSelectedRecordsMap((prev) => ({ ...prev, [col.id]: [] }));
-    toast.showToast(`Added ${itemsToAdd.length} record(s) from "${col.name}" to menu`, "success");
+    const parent = activeMenu?.items.find((i) => i.id === sidebarTargetParentId);
+    toast.showToast(
+      `Added ${itemsToAdd.length} record(s) ${parent ? `under "${parent.label}"` : "to menu"}`,
+      "success"
+    );
   };
 
   // Collections Section State
@@ -156,15 +184,6 @@ export const MenusStudioView: React.FC = () => {
   // Custom Links Section State
   const [customLinkUrl, setCustomLinkUrl] = useState("https://");
   const [customLinkText, setCustomLinkText] = useState("");
-
-  // Target parent for bulk add from left sidebar
-  const [targetParentIdForAdd, setTargetParentIdForAdd] = useState<string>("");
-
-  // Quick Add Sub-Item Modal State
-  const [subItemModalParent, setSubItemModalParent] = useState<MenuItem | null>(null);
-  const [subItemLabel, setSubItemLabel] = useState("");
-  const [subItemUrl, setSubItemUrl] = useState("/");
-  const [subItemType, setSubItemType] = useState<MenuItemType>("custom");
 
   // Right Side: Expanded items for settings
   const [expandedItemIds, setExpandedItemIds] = useState<Record<string, boolean>>({});
@@ -206,9 +225,13 @@ export const MenusStudioView: React.FC = () => {
         icon: c.icon,
       }));
 
-    addItemsToActiveMenu(itemsToAdd, targetParentIdForAdd || null);
+    addItemsToActiveMenu(itemsToAdd, sidebarTargetParentId || null);
     setSelectedCollections([]);
-    toast.showToast(`Added ${itemsToAdd.length} collection(s) to menu`, "success");
+    const parent = activeMenu?.items.find((i) => i.id === sidebarTargetParentId);
+    toast.showToast(
+      `Added ${itemsToAdd.length} collection(s) ${parent ? `under "${parent.label}"` : "to menu"}`,
+      "success"
+    );
   };
 
   // Handle adding custom link
@@ -227,12 +250,16 @@ export const MenusStudioView: React.FC = () => {
           type: "custom",
         },
       ],
-      targetParentIdForAdd || null
+      sidebarTargetParentId || null
     );
 
+    const parent = activeMenu?.items.find((i) => i.id === sidebarTargetParentId);
     setCustomLinkText("");
     setCustomLinkUrl("https://");
-    toast.showToast("Custom link added to menu", "success");
+    toast.showToast(
+      `Custom link added ${parent ? `under "${parent.label}"` : "to menu"}`,
+      "success"
+    );
   };
 
   // Handle adding a sub-item from modal
@@ -283,7 +310,7 @@ export const MenusStudioView: React.FC = () => {
     }
   };
 
-  // Build tree for JSON preview matching backend build_menu_tree
+  // Build tree for JSON preview (prioritizes parentId matching backend menu_service.py)
   const menuTreeJson = useMemo(() => {
     if (!activeMenu) return null;
 
@@ -291,35 +318,35 @@ export const MenusStudioView: React.FC = () => {
       children?: TreeItem[];
     }
 
-    const itemMap = new Map<string, TreeItem>();
-    const converted: TreeItem[] = activeMenu.items.map((it) => {
+    const itemMap: Record<string, TreeItem> = {};
+    const converted: TreeItem[] = [];
+    const roots: TreeItem[] = [];
+
+    activeMenu.items.forEach((it) => {
       const node: TreeItem = { ...it, children: [] };
-      if (node.id) itemMap.set(String(node.id), node);
-      return node;
+      converted.push(node);
+      if (node.id) {
+        itemMap[node.id] = node;
+      }
     });
 
-    const hasParentIds = converted.some((it) => Boolean(it.parentId));
-    let finalTree: TreeItem[] = [];
-
+    const hasParentIds = converted.some((item) => !!item.parentId);
     if (hasParentIds) {
-      const roots: TreeItem[] = [];
       converted.forEach((node) => {
-        const parentId = node.parentId ? String(node.parentId) : null;
-        if (parentId && itemMap.has(parentId)) {
-          const parent = itemMap.get(parentId)!;
-          parent.children = parent.children || [];
-          parent.children.push(node);
+        const pid = node.parentId ? String(node.parentId) : null;
+        if (pid && itemMap[pid]) {
+          itemMap[pid].children = itemMap[pid].children || [];
+          itemMap[pid].children.push(node);
         } else {
           roots.push(node);
         }
       });
-      finalTree = roots;
     } else {
-      // Fallback level-stack
-      const roots: TreeItem[] = [];
+      // Fallback hierarchy level stack
       const stack: { item: TreeItem; level: number }[] = [];
       converted.forEach((node) => {
-        while (stack.length > 0 && stack[stack.length - 1].level >= node.level) {
+        const lvl = Number(node.level || 0);
+        while (stack.length > 0 && stack[stack.length - 1].level >= lvl) {
           stack.pop();
         }
         if (stack.length === 0) {
@@ -329,9 +356,8 @@ export const MenusStudioView: React.FC = () => {
           parent.children = parent.children || [];
           parent.children.push(node);
         }
-        stack.push({ item: node, level: node.level });
+        stack.push({ item: node, level: lvl });
       });
-      finalTree = roots;
     }
 
     return {
@@ -341,7 +367,7 @@ export const MenusStudioView: React.FC = () => {
       locations: activeMenu.locations,
       autoAddPages: activeMenu.autoAddPages,
       updatedAt: activeMenu.updatedAt,
-      items: finalTree,
+      items: roots,
     };
   }, [activeMenu]);
 
@@ -434,18 +460,18 @@ export const MenusStudioView: React.FC = () => {
               </h3>
             </div>
 
-            {/* Target Parent Selector Card */}
+            {/* Target Parent Selector for sidebar additions */}
             {activeMenu.items.length > 0 && (
-              <div className="glass-card rounded-2xl p-3.5 border border-slate-200/80 dark:border-slate-800 space-y-2 shadow-sm bg-white/70 dark:bg-slate-900/60">
+              <div className="p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 space-y-2 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <i className="fa-solid fa-turn-up rotate-90 text-brand-500 text-[10px]"></i>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <i className="fa-solid fa-sitemap text-brand-500 text-xs"></i>
                     Add items under:
-                  </span>
-                  {targetParentIdForAdd && (
+                  </label>
+                  {sidebarTargetParentId && (
                     <button
                       type="button"
-                      onClick={() => setTargetParentIdForAdd("")}
+                      onClick={() => setSidebarTargetParentId("")}
                       className="text-[10px] text-brand-500 hover:underline font-semibold"
                     >
                       Reset to Top-Level
@@ -453,23 +479,24 @@ export const MenusStudioView: React.FC = () => {
                   )}
                 </div>
                 <select
-                  value={targetParentIdForAdd}
-                  onChange={(e) => setTargetParentIdForAdd(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium"
+                  value={sidebarTargetParentId}
+                  onChange={(e) => setSidebarTargetParentId(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium"
                 >
                   <option value="">📁 Top-Level (Default)</option>
                   {activeMenu.items
-                    .filter((it) => it.level < 2)
-                    .map((it) => (
-                      <option key={it.id} value={it.id}>
-                        {it.level === 0 ? "📁 " : "  ↳ "} {it.label} {it.level > 0 ? `(Level ${it.level})` : ""}
+                    .filter((item) => item.level < 2)
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.level === 0 ? "📁 " : "  ↳ "}
+                        {item.label} {item.level === 0 ? "(Top-Level)" : `(Level ${item.level})`}
                       </option>
                     ))}
                 </select>
                 <p className="text-[10px] text-slate-400 leading-tight">
-                  {targetParentIdForAdd
-                    ? "New items added from below will become sub-items under this item."
-                    : "New items will be added as top-level navigation items."}
+                  {sidebarTargetParentId
+                    ? `New items will be added as sub-items under "${activeMenu.items.find((i) => i.id === sidebarTargetParentId)?.label}".`
+                    : "New items will be added at the root level of this menu."}
                 </p>
               </div>
             )}
@@ -937,7 +964,7 @@ export const MenusStudioView: React.FC = () => {
                     const parentItem = item.parentId
                       ? activeMenu.items.find((i) => i.id === item.parentId)
                       : null;
-                    const candidateParents = activeMenu.items.filter(
+                    const potentialParents = activeMenu.items.filter(
                       (p) =>
                         p.id !== item.id &&
                         !getDescendantIdSet(activeMenu.items, item.id).has(p.id) &&
@@ -1010,22 +1037,32 @@ export const MenusStudioView: React.FC = () => {
                                   )}
                                 </>
                               )}
+
+                              {/* Parent indicator badge */}
+                              {parentItem && (
+                                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-brand-500/10 text-brand-600 dark:text-brand-400 text-[10px] font-medium shrink-0">
+                                  <i className="fa-solid fa-arrow-turn-up rotate-90 text-[9px]"></i>
+                                  <span>under <strong className="font-semibold">{parentItem.label}</strong></span>
+                                </span>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-2.5 shrink-0">
-                              {/* Quick + Sub-item action button */}
+                              {/* Quick + Sub-item button */}
                               {item.level < 2 && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setSubItemModalParent(item);
+                                    setSubItemLabel("");
+                                    setSubItemUrl(item.url ? `${item.url.replace(/\/$/, "")}/sub` : "/");
                                   }}
-                                  className="px-2 py-1 rounded-lg bg-slate-200/60 dark:bg-slate-700/60 hover:bg-brand-500/15 text-slate-600 dark:text-slate-300 hover:text-brand-500 text-[10px] font-bold transition flex items-center gap-1"
-                                  title={`Add sub-item directly under "${item.label}"`}
+                                  className="px-2 py-0.5 rounded-md border border-brand-500/30 bg-brand-500/5 hover:bg-brand-500/15 text-brand-600 dark:text-brand-400 text-[10px] font-bold transition flex items-center gap-1"
+                                  title={`Add sub-item under "${item.label}"`}
                                 >
                                   <i className="fa-solid fa-plus text-[9px]"></i>
-                                  <span className="hidden sm:inline">Sub-item</span>
+                                  <span>Sub-item</span>
                                 </button>
                               )}
 
@@ -1079,6 +1116,28 @@ export const MenusStudioView: React.FC = () => {
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                                    Parent Menu Item
+                                  </label>
+                                  <select
+                                    value={item.parentId || ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setMenuItemParent(item.id, val ? val : null);
+                                    }}
+                                    className="w-full px-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                  >
+                                    <option value="">— None (Top-Level Item) —</option>
+                                    {potentialParents.map((cand) => (
+                                      <option key={cand.id} value={cand.id}>
+                                        {cand.level === 0 ? "📁 " : "  ↳ "}
+                                        {cand.label} {cand.level === 0 ? "(Top-Level)" : `(Level ${cand.level})`}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                                     Title Attribute (Tooltip)
                                   </label>
                                   <input
@@ -1091,21 +1150,21 @@ export const MenusStudioView: React.FC = () => {
                                     className="w-full px-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
                                   />
                                 </div>
+                              </div>
 
-                                <div>
-                                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                                    CSS Classes (Optional)
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={item.classes || ""}
-                                    onChange={(e) =>
-                                      updateMenuItem(item.id, { classes: e.target.value })
-                                    }
-                                    placeholder="e.g. highlight-btn external-link"
-                                    className="w-full px-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono text-[11px]"
-                                  />
-                                </div>
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                                  CSS Classes (Optional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={item.classes || ""}
+                                  onChange={(e) =>
+                                    updateMenuItem(item.id, { classes: e.target.value })
+                                  }
+                                  placeholder="e.g. highlight-btn external-link"
+                                  className="w-full px-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono text-[11px]"
+                                />
                               </div>
 
                               {/* Checkbox: Open link in a new tab */}
@@ -1127,42 +1186,7 @@ export const MenusStudioView: React.FC = () => {
                                 </label>
                               </div>
 
-                              {/* Parent Item Assignment */}
-                              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                    <i className="fa-solid fa-sitemap text-brand-500 text-xs"></i>
-                                    Parent Menu Item
-                                  </label>
-                                  {item.level < 2 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setSubItemModalParent(item)}
-                                      className="text-[10px] font-bold text-brand-500 hover:text-brand-600 flex items-center gap-1"
-                                    >
-                                      <i className="fa-solid fa-plus text-[9px]"></i>
-                                      Add sub-item under this
-                                    </button>
-                                  )}
-                                </div>
 
-                                <select
-                                  value={item.parentId || ""}
-                                  onChange={(e) => setMenuItemParent(item.id, e.target.value || null)}
-                                  className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium"
-                                >
-                                  <option value="">— None (Top-Level Menu Item) —</option>
-                                  {candidateParents.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                      {p.level === 0 ? "📁 " : "  ↳ "} {p.label} {p.level > 0 ? `(Level ${p.level})` : "(Top-Level)"}
-                                    </option>
-                                  ))}
-                                </select>
-
-                                <p className="text-[10px] text-slate-400 leading-tight">
-                                  Assign this item under any parent item. Multiple subitems can easily share the same parent item.
-                                </p>
-                              </div>
 
                               {/* Hierarchy Controls & Actions */}
                               <div className="pt-3 border-t border-slate-200/80 dark:border-slate-700/80 flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -1210,6 +1234,22 @@ export const MenusStudioView: React.FC = () => {
                                     <i className="fa-solid fa-outdent"></i>
                                     <span>Outdent</span>
                                   </button>
+
+                                  {item.level < 2 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSubItemModalParent(item);
+                                        setSubItemLabel("");
+                                        setSubItemUrl(item.url ? `${item.url.replace(/\/$/, "")}/sub` : "/");
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg border border-brand-500/30 bg-brand-500/10 hover:bg-brand-500/20 text-brand-600 dark:text-brand-400 text-[11px] font-semibold flex items-center gap-1.5 transition ml-1"
+                                      title={`Create a new sub-item under "${item.label}"`}
+                                    >
+                                      <i className="fa-solid fa-plus text-[10px]"></i>
+                                      <span>Add Sub-Item</span>
+                                    </button>
+                                  )}
                                 </div>
 
                                 <div className="flex items-center gap-3">
@@ -1661,6 +1701,122 @@ export const MenusStudioView: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add Sub-Item Directly */}
+      {subItemModalParent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+          <div className="glass-panel rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-brand-500/10 text-brand-500 flex items-center justify-center text-sm">
+                  <i className="fa-solid fa-folder-plus"></i>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Add Sub-Item
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Under <strong className="text-brand-500">{subItemModalParent.label}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSubItemModalParent(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition"
+              >
+                <i className="fa-solid fa-xmark text-sm"></i>
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!subItemLabel.trim() || !subItemUrl.trim()) {
+                  toast.showToast("Please provide both label and URL", "error");
+                  return;
+                }
+                addSubItem(subItemModalParent.id, {
+                  label: subItemLabel.trim(),
+                  url: subItemUrl.trim(),
+                  type: subItemType,
+                });
+                toast.showToast(
+                  `Sub-item "${subItemLabel.trim()}" added under "${subItemModalParent.label}"`,
+                  "success"
+                );
+                setSubItemModalParent(null);
+                setSubItemLabel("");
+                setSubItemUrl("/");
+              }}
+              className="space-y-3.5 pt-1"
+            >
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Sub-Item Label *
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="e.g. Mens Shoes, Documentation"
+                  value={subItemLabel}
+                  onChange={(e) => setSubItemLabel(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  URL / Target Link *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="/category/shoes or https://..."
+                  value={subItemUrl}
+                  onChange={(e) => setSubItemUrl(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 font-mono text-[11px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Type
+                </label>
+                <select
+                  value={subItemType}
+                  onChange={(e) => setSubItemType(e.target.value as MenuItemType)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+                >
+                  <option value="custom">Custom Link</option>
+                  <option value="page">Page</option>
+                  <option value="collection">Collection</option>
+                  <option value="category">Category</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200/60 dark:border-slate-800/60">
+                <button
+                  type="button"
+                  onClick={() => setSubItemModalParent(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!subItemLabel.trim() || !subItemUrl.trim()}
+                  className="px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold transition disabled:opacity-50 flex items-center gap-1.5 shadow-md shadow-brand-500/20"
+                >
+                  <i className="fa-solid fa-plus text-xs"></i>
+                  <span>Add Sub-Item</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

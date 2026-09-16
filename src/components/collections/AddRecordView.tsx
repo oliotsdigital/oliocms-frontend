@@ -4,13 +4,12 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
-import { CollectionSchema, SeoMetadata } from "@/models/collection.model";
+import { CollectionSchema } from "@/models/collection.model";
 import { fetchCollectionSchemaApi, createCollectionRecordApi } from "@/api/collection.api";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useOlio } from "@/state/OlioProvider";
 import { MediaFieldInput } from "./MediaFieldInput";
 import { EnumerationFieldInput } from "./EnumerationFieldInput";
-import { SeoFormSection } from "./SeoFormSection";
 
 interface AddRecordViewProps {
   collectionId: string;
@@ -35,8 +34,6 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
 
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const titleValue = watch("title");
-  const slugValue = watch("slug");
-  const [seoData, setSeoData] = useState<SeoMetadata>({});
 
   useEffect(() => {
     if (!slugManuallyEdited && titleValue) {
@@ -87,15 +84,6 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
         cleanedData[f.name] = val !== undefined ? val : null;
       }
     });
-
-    cleanedData.seo = {
-      title: seoData.title?.trim() || null,
-      description: seoData.description?.trim() || null,
-      keywords: seoData.keywords?.trim() || null,
-      og_image: seoData.og_image?.trim() || null,
-      canonical_url: seoData.canonical_url?.trim() || null,
-      no_index: Boolean(seoData.no_index),
-    };
 
     const res = await createCollectionRecordApi(schema.id, cleanedData);
     setSubmitting(false);
@@ -149,9 +137,8 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {/* Form Main Container */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Column: Dynamic Fields & SEO */}
-              <div className="lg:col-span-2 space-y-6">
-                <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-slate-200/50 dark:border-slate-800/50 shadow-xl space-y-6">
+              {/* Left Column: Dynamic Fields (2 Cols wide) */}
+              <div className="lg:col-span-2 glass-panel rounded-3xl p-6 sm:p-8 border border-slate-200/50 dark:border-slate-800/50 shadow-xl space-y-6">
                 <div className="pb-4 border-b border-slate-200/40 dark:border-slate-800/40 flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -317,19 +304,7 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
                 </div>
               </div>
 
-              {/* Built-in SEO & Social Section */}
-              <SeoFormSection
-                seo={seoData}
-                onChange={setSeoData}
-                fallbackTitle={typeof titleValue === "string" ? titleValue : ""}
-                fallbackSlug={typeof slugValue === "string" ? slugValue : ""}
-                collectionSlug={schema.slug}
-                projectId={schema.project_id}
-                disabled={submitting}
-              />
-            </div>
-
-            {/* Right Column: Actions Sidebar Card */}
+              {/* Right Column: Actions Sidebar Card */}
               <div className="space-y-6">
                 <div className="glass-panel rounded-3xl p-6 border border-slate-200/50 dark:border-slate-800/50 shadow-xl space-y-5">
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-200/40 dark:border-slate-800/40 pb-3">
@@ -370,14 +345,6 @@ export const AddRecordView: React.FC<AddRecordViewProps> = ({ collectionId }) =>
                     </p>
                     <p>
                       <strong>Fields:</strong> {schema.schema_definition.length} properties
-                    </p>
-                    <p>
-                      <strong>SEO:</strong>{" "}
-                      {seoData.title || seoData.description || seoData.og_image ? (
-                        <span className="text-emerald-500 font-semibold">Configured</span>
-                      ) : (
-                        <span className="text-slate-400">Auto Fallback</span>
-                      )}
                     </p>
                   </div>
                 </div>
